@@ -1,0 +1,56 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.docstates
+*.rsuser
+
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET
+publish/
+*.dll
+*.exe
+*.pdb
+
+# User-specific
+*.userprefs
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Rider
+.idea/
+
+# MPV binaries (downloaded at build time)
+libs/
+
+# Poster cache
+cache/
+
+# Local Copilot/Qoder workspace metadata
+.codex/
+.qoder/
