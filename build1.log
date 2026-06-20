@@ -1,0 +1,19 @@
+﻿  姝ｅ湪纭畾瑕佽繕鍘熺殑椤圭洰鈥?
+  鎵€鏈夐」鐩潎鏄渶鏂扮殑锛屾棤娉曡繕鍘熴€?
+  SweetPlayer.Core -> C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer.Core\bin\Debug\net8.0\SweetPlayer.Core.dll
+  SweetPlayer.Services -> C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer.Services\bin\Debug\net8.0\SweetPlayer.Services.dll
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\Views\PlayerPage.xaml.cs(70,20): error CS1061: 鈥淚KeyboardShortcutService鈥濇湭鍖呭惈鈥淔ullScreenToggleHandler鈥濈殑瀹氫箟锛屽苟涓旀壘涓嶅埌鍙帴鍙楃涓€涓€淚KeyboardShortcutService鈥濈被鍨嬪弬鏁扮殑鍙闂墿灞曟柟娉曗€淔ullScreenToggleHandler鈥?鏄惁缂哄皯 using 鎸囦护鎴栫▼搴忛泦寮曠敤?) [C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\Views\PlayerPage.xaml.cs(75,20): error CS1061: 鈥淚KeyboardShortcutService鈥濇湭鍖呭惈鈥淓xitPlayerHandler鈥濈殑瀹氫箟锛屽苟涓旀壘涓嶅埌鍙帴鍙楃涓€涓€淚KeyboardShortcutService鈥濈被鍨嬪弬鏁扮殑鍙闂墿灞曟柟娉曗€淓xitPlayerHandler鈥?鏄惁缂哄皯 using 鎸囦护鎴栫▼搴忛泦寮曠敤?) [C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\ViewModels\PlayerViewModel.cs(85,18): warning CS0414: 瀛楁鈥淧layerViewModel._suppressSeekFeedback鈥濆凡琚祴鍊硷紝浣嗕粠鏈娇鐢ㄨ繃瀹冪殑鍊?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\.nuget\packages\microsoft.windowsappsdk\1.5.240802000\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets(841,9): error MSB3073: 鍛戒护鈥?C:\Users\Simon\.nuget\packages\microsoft.windowsappsdk\1.5.240802000\buildTransitive\..\tools\net6.0\..\net472\XamlCompiler.exe" "obj\x64\Debug\net8.0-windows10.0.19041.0\\input.json" "obj\x64\Debug\net8.0-windows10.0.19041.0\\output.json"鈥濆凡閫€鍑猴紝浠ｇ爜涓?1銆?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+
+鐢熸垚澶辫触銆?
+
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\ViewModels\PlayerViewModel.cs(85,18): warning CS0414: 瀛楁鈥淧layerViewModel._suppressSeekFeedback鈥濆凡琚祴鍊硷紝浣嗕粠鏈娇鐢ㄨ繃瀹冪殑鍊?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\Views\PlayerPage.xaml.cs(70,20): error CS1061: 鈥淚KeyboardShortcutService鈥濇湭鍖呭惈鈥淔ullScreenToggleHandler鈥濈殑瀹氫箟锛屽苟涓旀壘涓嶅埌鍙帴鍙楃涓€涓€淚KeyboardShortcutService鈥濈被鍨嬪弬鏁扮殑鍙闂墿灞曟柟娉曗€淔ullScreenToggleHandler鈥?鏄惁缂哄皯 using 鎸囦护鎴栫▼搴忛泦寮曠敤?) [C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\Views\PlayerPage.xaml.cs(75,20): error CS1061: 鈥淚KeyboardShortcutService鈥濇湭鍖呭惈鈥淓xitPlayerHandler鈥濈殑瀹氫箟锛屽苟涓旀壘涓嶅埌鍙帴鍙楃涓€涓€淚KeyboardShortcutService鈥濈被鍨嬪弬鏁扮殑鍙闂墿灞曟柟娉曗€淓xitPlayerHandler鈥?鏄惁缂哄皯 using 鎸囦护鎴栫▼搴忛泦寮曠敤?) [C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\.nuget\packages\microsoft.windowsappsdk\1.5.240802000\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets(841,9): error MSB3073: 鍛戒护鈥?C:\Users\Simon\.nuget\packages\microsoft.windowsappsdk\1.5.240802000\buildTransitive\..\tools\net6.0\..\net472\XamlCompiler.exe" "obj\x64\Debug\net8.0-windows10.0.19041.0\\input.json" "obj\x64\Debug\net8.0-windows10.0.19041.0\\output.json"鈥濆凡閫€鍑猴紝浠ｇ爜涓?1銆?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+    1 涓鍛?
+    3 涓敊璇?
+
+宸茬敤鏃堕棿 00:00:05.42

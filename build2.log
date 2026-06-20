@@ -1,0 +1,20 @@
+﻿  姝ｅ湪纭畾瑕佽繕鍘熺殑椤圭洰鈥?
+  宸茶繕鍘?c:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer.Services\SweetPlayer.Services.csproj (鐢ㄦ椂 187 姣)銆?
+  宸茶繕鍘?C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj (鐢ㄦ椂 211 姣)銆?
+  1 涓」鐩?鍏?3 涓?鏄渶鏂扮殑锛屾棤娉曡繕鍘熴€?
+  SweetPlayer.Core -> C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer.Core\bin\Debug\net8.0\SweetPlayer.Core.dll
+  SweetPlayer.Services -> c:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer.Services\bin\Debug\net8.0\SweetPlayer.Services.dll
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\ViewModels\PlayerViewModel.cs(85,18): warning CS0414: 瀛楁鈥淧layerViewModel._suppressSeekFeedback鈥濆凡琚祴鍊硷紝浣嗕粠鏈娇鐢ㄨ繃瀹冪殑鍊?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\ViewModels\PlayerViewModel.cs(85,18): warning CS0414: 瀛楁鈥淧layerViewModel._suppressSeekFeedback鈥濆凡琚祴鍊硷紝浣嗕粠鏈娇鐢ㄨ繃瀹冪殑鍊?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Program Files\dotnet\sdk\10.0.300\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.Sdk.targets(308,5): warning NETSDK1206: 鎵惧埌浜嗙壒瀹氫簬鐗堟湰鎴栫壒瀹氫簬鍙戣鐗堢殑杩愯鏃舵爣璇嗙: win10-arm64, win10-x64, win10-x86銆傚彈褰卞搷鐨勫簱: Microsoft.WindowsAppSDK銆傚湪 .NET 8.0 鍙婃洿楂樼増鏈腑锛岄粯璁ゆ儏鍐典笅鎵句笉鍒扮壒瀹氫簬鐗堟湰鍜岀壒瀹氫簬鍙戣鐗堢殑杩愯鏃舵爣璇嗙鐨勮祫浜с€傛湁鍏宠缁嗕俊鎭紝璇峰弬闃?https://aka.ms/dotnet/rid-usage銆?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+  SweetPlayer -> C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\bin\x64\Debug\net8.0-windows10.0.19041.0\SweetPlayer.dll
+
+宸叉垚鍔熺敓鎴愩€?
+
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\ViewModels\PlayerViewModel.cs(85,18): warning CS0414: 瀛楁鈥淧layerViewModel._suppressSeekFeedback鈥濆凡琚祴鍊硷紝浣嗕粠鏈娇鐢ㄨ繃瀹冪殑鍊?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\ViewModels\PlayerViewModel.cs(85,18): warning CS0414: 瀛楁鈥淧layerViewModel._suppressSeekFeedback鈥濆凡琚祴鍊硷紝浣嗕粠鏈娇鐢ㄨ繃瀹冪殑鍊?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+C:\Program Files\dotnet\sdk\10.0.300\Sdks\Microsoft.NET.Sdk\targets\Microsoft.NET.Sdk.targets(308,5): warning NETSDK1206: 鎵惧埌浜嗙壒瀹氫簬鐗堟湰鎴栫壒瀹氫簬鍙戣鐗堢殑杩愯鏃舵爣璇嗙: win10-arm64, win10-x64, win10-x86銆傚彈褰卞搷鐨勫簱: Microsoft.WindowsAppSDK銆傚湪 .NET 8.0 鍙婃洿楂樼増鏈腑锛岄粯璁ゆ儏鍐典笅鎵句笉鍒扮壒瀹氫簬鐗堟湰鍜岀壒瀹氫簬鍙戣鐗堢殑杩愯鏃舵爣璇嗙鐨勮祫浜с€傛湁鍏宠缁嗕俊鎭紝璇峰弬闃?https://aka.ms/dotnet/rid-usage銆?[C:\Users\Simon\Documents\Projects\SweetPlayer\src\SweetPlayer\SweetPlayer.csproj]
+    3 涓鍛?
+    0 涓敊璇?
+
+宸茬敤鏃堕棿 00:00:07.72

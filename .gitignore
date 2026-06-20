@@ -54,3 +54,4 @@ cache/
 # Local Copilot/Qoder workspace metadata
 .codex/
 .qoder/
+.claude/
