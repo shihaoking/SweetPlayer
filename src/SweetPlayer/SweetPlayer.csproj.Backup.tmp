@@ -18,8 +18,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LibMpv.Avalonia" Version="1.0.0" />
-    <PackageReference Include="LibMpv.Client" Version="1.0.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
@@ -61,10 +59,28 @@
     <None Include="Native\x64\libmpv-2.dll" Condition="'$(Platform)' == 'x64' And Exists('Native\x64\libmpv-2.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>libmpv-2.dll</Link>
-      <!-- WinUI3 打包时需要指定为 Native 资产 -->
-      <Pack>true</Pack>
-      <PackagePath>runtimes\win-x64\native</PackagePath>
     </None>
+    <None Include="Native\x86\libmpv-2.dll" Condition="'$(Platform)' == 'x86' And Exists('Native\x86\libmpv-2.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libmpv-2.dll</Link>
+    </None>
+    <None Include="Native\ARM64\libmpv-2.dll" Condition="'$(Platform)' == 'ARM64' And Exists('Native\ARM64\libmpv-2.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libmpv-2.dll</Link>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

@@ -1,10 +1,12 @@
-using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SweetPlayer.Services.Playback;
+using System.Runtime.InteropServices;
 using WinRT;
 
 namespace SweetPlayer.Controls;
+
 
 /// <summary>
 /// 基于 SwapChainPanel 的 libmpv 渲染控件。
@@ -69,6 +71,7 @@ public sealed partial class MpvPlayerControl : UserControl
                 nativePtr,
                 (int)VideoPanel.ActualWidth,
                 (int)VideoPanel.ActualHeight);
+
             _initialized = true;
         }
         catch

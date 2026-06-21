@@ -12,7 +12,7 @@ namespace SweetPlayer.Services.Playback;
 public static class MpvInterop
 {
     /// <summary>libmpv 动态库名（无后缀，由 P/Invoke 解析）。</summary>
-    public const string LibraryName = "mpv-2";
+    public const string LibraryName = "libmpv-2";
 
     // ---------- 错误码 ----------
     public const int MPV_ERROR_SUCCESS = 0;
@@ -60,12 +60,45 @@ public static class MpvInterop
     public const int MPV_RENDER_PARAM_SW_FORMAT = 18;
     public const int MPV_RENDER_PARAM_SW_STRIDE = 19;
     public const int MPV_RENDER_PARAM_SW_POINTER = 20;
+    public const int MPV_RENDER_PARAM_D3D11_DEVICE = 21;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MpvRenderParam
     {
         public int type;
         public IntPtr data;
+    }
+
+    /// <summary>每个 mpv_render_param 在非托管内存中的字节大小（x64=16，含4字节对齐填充）。</summary>
+    public static readonly int RenderParamSize = Marshal.SizeOf<MpvRenderParam>();
+
+    /// <summary>
+    /// 在非托管内存中分配一个 mpv_render_param 数组，初始值全为零（INVALID 结尾）。
+    /// 调用方须用 <see cref="FreeRenderParams"/> 释放。
+    /// </summary>
+    public static IntPtr AllocRenderParams(int count)
+    {
+        int size = RenderParamSize * count;
+        var ptr = Marshal.AllocHGlobal(size);
+        // 全部清零（确保 type=INVALID, data=0）
+        for (int i = 0; i < size; i++)
+            Marshal.WriteByte(ptr, i, 0);
+        return ptr;
+    }
+
+    /// <summary>写入单个 mpv_render_param 到指定索引位置。</summary>
+    public static void WriteRenderParam(IntPtr array, int index, int type, IntPtr data)
+    {
+        var offset = array + index * RenderParamSize;
+        Marshal.WriteInt32(offset, type);
+        Marshal.WriteIntPtr(offset, 8, data); // data 在 int(4) + padding(4) 之后 = offset 8
+    }
+
+    /// <summary>释放由 <see cref="AllocRenderParams"/> 分配的内存。</summary>
+    public static void FreeRenderParams(IntPtr ptr)
+    {
+        if (ptr != IntPtr.Zero)
+            Marshal.FreeHGlobal(ptr);
     }
 
     [StructLayout(LayoutKind.Sequential)]

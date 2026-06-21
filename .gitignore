@@ -47,6 +47,7 @@ Desktop.ini
 
 # MPV binaries (downloaded at build time)
 libs/
+src/SweetPlayer/Native/**/*.dll
 
 # Poster cache
 cache/

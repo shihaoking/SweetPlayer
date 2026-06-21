@@ -6,6 +6,7 @@ using SweetPlayer.Core.Data;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services;
 using SweetPlayer.Services.Playback;
+using SweetPlayer.Views;
 
 namespace SweetPlayer.ViewModels;
 
@@ -112,7 +113,9 @@ public sealed partial class MovieDetailViewModel : ViewModelBase
         var target = SelectedVersion ?? Versions.FirstOrDefault();
         if (target is null) return;
         await _playback.PlayVideoAsync(target);
-        // 注意：播放页 UI 由模块 8 实现，此处仅触发底层播放服务。
+
+        // 导航到播放页面
+        _navigation.NavigateTo(typeof(PlayerPage), target);
     }
 
     [RelayCommand]

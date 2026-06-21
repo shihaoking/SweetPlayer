@@ -6,6 +6,7 @@ using SweetPlayer.Core.Data;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services;
 using SweetPlayer.Services.Playback;
+using SweetPlayer.Views;
 
 namespace SweetPlayer.ViewModels;
 
@@ -179,6 +180,9 @@ public sealed partial class SeriesDetailViewModel : ViewModelBase
     {
         if (episode?.File is null) return;
         await _playback.PlayVideoAsync(episode.File);
+
+        // 导航到播放页面
+        _navigation.NavigateTo(typeof(PlayerPage), episode.File);
     }
 
     [RelayCommand]

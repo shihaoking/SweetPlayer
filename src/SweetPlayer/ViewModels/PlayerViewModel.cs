@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services.Playback;
 
@@ -82,11 +83,13 @@ public sealed class ChapterItem
 public sealed partial class PlayerViewModel : ViewModelBase
 {
     private readonly IPlaybackControlService _playback;
+    private readonly DispatcherQueue _dispatcherQueue;
     private bool _suppressSeekFeedback;
 
     public PlayerViewModel(IPlaybackControlService playback)
     {
         _playback = playback;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         AspectRatios = new ObservableCollection<AspectRatioOption>
         {
@@ -452,20 +455,26 @@ public sealed partial class PlayerViewModel : ViewModelBase
 
     private void OnPositionChanged(object? sender, TimeSpan position)
     {
-        if (IsUserSeeking) return;
-        PositionSeconds = position.TotalSeconds;
-        var dur = _playback.Duration.TotalSeconds;
-        if (dur > 0 && Math.Abs(DurationSeconds - dur) > 0.5)
+        _dispatcherQueue.TryEnqueue(() =>
         {
-            DurationSeconds = dur;
-        }
-        _suppressSeekFeedback = false;
-        CheckUpNext();
+            if (IsUserSeeking) return;
+            PositionSeconds = position.TotalSeconds;
+            var dur = _playback.Duration.TotalSeconds;
+            if (dur > 0 && Math.Abs(DurationSeconds - dur) > 0.5)
+            {
+                DurationSeconds = dur;
+            }
+            _suppressSeekFeedback = false;
+            CheckUpNext();
+        });
     }
 
     private void OnStateChanged(object? sender, PlaybackState state)
     {
-        IsPlaying = state == PlaybackState.Playing;
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            IsPlaying = state == PlaybackState.Playing;
+        });
     }
 
     // ---------- OSD ----------

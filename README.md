@@ -41,7 +41,47 @@ Without a TMDB API key, the app will only use Douban for metadata scraping.
 
 ## Getting Started
 
-> Coming soon — project is in planning phase.
+📖 **[完整快速开始指南](docs/QUICK_START.md)**
+
+### Prerequisites
+
+1. **Windows 10 version 1809 (build 17763) or later**
+2. **.NET 8.0 SDK**
+3. **LibMPV dynamic library** — Required for video playback
+
+   The app will fall back to mock playback mode if `libmpv-2.dll` is not found. To enable real video playback:
+
+   📖 **[See LibMPV Setup Guide](docs/LIBMPV_SETUP.md)** for detailed instructions
+
+   Quick setup:
+
+   ```powershell
+   # Run automated deployment script
+   .\scripts\setup-libmpv.ps1
+   ```
+
+   Or manually:
+   - Download libmpv from [shinchiro/mpv-winbuild-cmake releases](https://github.com/shinchiro/mpv-winbuild-cmake/releases)
+   - Extract `libmpv-2.dll` and place it in `src/SweetPlayer/Native/{architecture}/`
+
+### Build and Run
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/SweetPlayer.git
+cd SweetPlayer
+
+# Deploy libmpv (automated)
+.\scripts\setup-libmpv.ps1
+
+# Build the solution
+dotnet build
+
+# Run the application
+dotnet run --project src/SweetPlayer
+```
+
+See [Quick Start Guide](docs/QUICK_START.md) for detailed instructions and troubleshooting.
 
 ## License
 
