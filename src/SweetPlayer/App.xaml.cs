@@ -69,6 +69,9 @@ public partial class App : Application
         {
             builder.AddDebug();
             builder.SetMinimumLevel(LogLevel.Debug);
+            // 屏蔽 EF Core SQL 执行日志
+            builder.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+            builder.AddFilter("Microsoft.EntityFrameworkCore.Database.Connection", LogLevel.Warning);
         });
 
         // HttpClient（含 WebDAV 命名客户端）
