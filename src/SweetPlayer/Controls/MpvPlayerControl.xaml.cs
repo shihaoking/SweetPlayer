@@ -53,6 +53,15 @@ public sealed partial class MpvPlayerControl : UserControl
         if (_player is null) return;
         var w = (int)Math.Max(1, e.NewSize.Width);
         var h = (int)Math.Max(1, e.NewSize.Height);
+
+        // 如果渲染器尚未初始化（首次布局时尺寸可能为 0），在此重试。
+        // 这是 OnLoaded 阶段 ActualWidth/Height 为 0 导致跳过初始化的补偿逻辑。
+        if (!_initialized)
+        {
+            TryInitializeRenderer();
+            return;
+        }
+
         _player.Resize(w, h);
     }
 
@@ -66,18 +75,22 @@ public sealed partial class MpvPlayerControl : UserControl
         try
         {
             // 取 SwapChainPanel 的本机指针交给底层渲染。
+            // WinUI 3 SwapChainPanel 内部处理 DPI 缩放，SwapChain 使用逻辑像素尺寸即可。
             var nativePtr = GetNativePointer(VideoPanel);
+            System.Diagnostics.Debug.WriteLine($"[MpvPlayerControl] GetNativePointer={nativePtr}, PanelSize={VideoPanel.ActualWidth}x{VideoPanel.ActualHeight}");
             _player.InitializeRenderer(
                 nativePtr,
                 (int)VideoPanel.ActualWidth,
                 (int)VideoPanel.ActualHeight);
 
             _initialized = true;
+            System.Diagnostics.Debug.WriteLine("[MpvPlayerControl] 渲染器初始化成功");
         }
-        catch
+        catch (Exception ex)
         {
             // 渲染初始化失败时降级；播放控制仍可用。
             _initialized = false;
+            System.Diagnostics.Debug.WriteLine($"[MpvPlayerControl] TryInitializeRenderer 异常: {ex}");
         }
     }
 
