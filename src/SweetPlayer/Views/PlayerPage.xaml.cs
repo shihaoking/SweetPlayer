@@ -279,17 +279,98 @@ public sealed partial class PlayerPage : Page
 
     // ---------- 进度条 ----------
 
+    private double _lastSliderValue = 0;
+    private bool _isDragging = false;
+
+    private void OnProgressSliderValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PlayerPage] ValueChanged: OldValue={e.OldValue}, NewValue={e.NewValue}, IsUserSeeking={ViewModel.IsUserSeeking}");
+        
+        // 检测拖动：如果值变化超过阈值（正常播放1秒约变化1-2），认为是用户拖动
+        var diff = Math.Abs(e.NewValue - e.OldValue);
+        
+        if (diff > 5.0 && !_isDragging)
+        {
+            // 检测到用户开始拖动
+            _isDragging = true;
+            ViewModel.IsUserSeeking = true;
+            System.Diagnostics.Debug.WriteLine($"[PlayerPage] Drag started detected (diff={diff}), setting IsUserSeeking=true");
+        }
+        
+        // 在拖动过程中更新 ViewModel 的位置
+        if (_isDragging || ViewModel.IsUserSeeking)
+        {
+            ViewModel.PositionSeconds = e.NewValue;
+            _lastSliderValue = e.NewValue;
+            System.Diagnostics.Debug.WriteLine($"[PlayerPage] Updated PositionSeconds to {e.NewValue} during drag");
+        }
+        else
+        {
+            // 正常播放进度更新
+            _lastSliderValue = e.NewValue;
+        }
+    }
+
+    private void OnProgressGridPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        // 检查是否点击在 Slider 区域
+        if (e.OriginalSource is Microsoft.UI.Xaml.Controls.Slider || 
+            (e.OriginalSource is FrameworkElement fe && FindParent<Slider>(fe) is not null))
+        {
+            System.Diagnostics.Debug.WriteLine("[PlayerPage] PointerPressed on Slider area");
+            ViewModel.IsUserSeeking = true;
+            _isDragging = true;
+        }
+    }
+
+    private void OnProgressGridPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PlayerPage] Grid PointerReleased, IsUserSeeking={ViewModel.IsUserSeeking}, PositionSeconds={ViewModel.PositionSeconds}");
+        if (ViewModel.IsUserSeeking || _isDragging)
+        {
+            ViewModel.CommitSeekFromSlider();
+            _isDragging = false;
+        }
+    }
+
+    private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
+    {
+        var parent = VisualTreeHelper.GetParent(child);
+        while (parent is not null)
+        {
+            if (parent is T typed) return typed;
+            parent = VisualTreeHelper.GetParent(parent);
+        }
+        return null;
+    }
+
     private void OnSliderPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        System.Diagnostics.Debug.WriteLine("[PlayerPage] Slider PointerPressed");
         ViewModel.IsUserSeeking = true;
+        _isDragging = true;
+        e.Handled = true;
     }
 
     private void OnSliderPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        if (ViewModel.IsUserSeeking)
+        System.Diagnostics.Debug.WriteLine($"[PlayerPage] Slider PointerReleased, PositionSeconds={ViewModel.PositionSeconds}");
+        if (ViewModel.IsUserSeeking || _isDragging)
         {
             ViewModel.CommitSeekFromSlider();
+            _isDragging = false;
         }
+        e.Handled = true;
+    }
+
+    private void OnSliderTapped(object sender, TappedRoutedEventArgs e)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PlayerPage] Tapped - 用户点击进度条, PositionSeconds={ViewModel.PositionSeconds}");
+        // 点击进度条时立即执行 seek
+        ViewModel.PositionSeconds = ProgressSlider.Value;
+        ViewModel.CommitSeekFromSlider();
+        _isDragging = false;
+        e.Handled = true;
     }
 
     // ---------- 控制按钮 ----------

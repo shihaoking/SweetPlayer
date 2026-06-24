@@ -88,3 +88,64 @@
 - **WHEN** D3D11 设备返回 DXGI_ERROR_DEVICE_RESET
 - **THEN** 系统记录驱动重置日志
 - **THEN** 系统通知用户设备异常（可选）
+
+### Requirement: SwapChainPanel 关联与 Present 必须在 UI 线程
+系统 SHALL 通过 `SynchronizationContext.Post` 将 `ISwapChainPanelNative.SetSwapChain` 与 `IDXGISwapChain.Present` 分派回 UI 线程执行。
+
+#### Scenario: 捕获 UI 线程同步上下文
+- **WHEN** `InitializeRenderer` 被 UI 线程调用
+- **THEN** 系统保存 `SynchronizationContext.Current` 到实例字段
+- **THEN** 后续跨线程调用使用该上下文 `Post`
+
+#### Scenario: SetSwapChain 分派回 UI 线程
+- **WHEN** 渲染线程创建好 SwapChain 后需要关联
+- **THEN** 系统 `Post` 到 UI 线程调用 `ISwapChainPanelNative.SetSwapChain`
+- **THEN** 渲染线程以超时 1s 等待关联完成后才进入渲染循环
+
+#### Scenario: Present 分派回 UI 线程
+- **WHEN** 渲染线程完成一帧上传到 BackBuffer
+- **THEN** 系统 `Post` 到 UI 线程调用 `IDXGISwapChain.Present(1, None)`
+- **THEN** 渲染线程以超时 200ms 等待 Present 完成后进入下一帧
+
+### Requirement: SwapChain 使用逻辑像素尺寸
+系统 SHALL 使用 `SwapChainPanel.ActualWidth/ActualHeight` 逻辑像素作为 SwapChain 尺寸，不乘以 DPI 缩放因子。
+
+#### Scenario: 初始化使用逻辑像素
+- **WHEN** 调用 `InitializeRenderer`
+- **THEN** 传入 `width = (int)VideoPanel.ActualWidth` 、`height = (int)VideoPanel.ActualHeight`
+- **THEN** 系统 NEVER 乘以 `XamlRoot.RasterizationScale`
+
+#### Scenario: 避免 DPI 黑边
+- **WHEN** 面板在 高 DPI 环境运行（如 125%/150%）
+- **THEN** SwapChain 尺寸仍然为逻辑像素，WinUI 3 SwapChainPanel 内部负责物理像素映射
+- **THEN** 画面不出现黑边
+
+### Requirement: 加载文件须等待渲染上下文就绪
+系统 SHALL 确保 `loadfile` 命令在 `mpv_render_context_create` 成功之后才执行，否则 mpv vo 初始化会报 `No render context set` 并永久禁用视频输出。
+
+#### Scenario: 业务层仅先导航后加载
+- **WHEN** 用户点击播放按钮（`MovieDetailViewModel.PlayCommand` / `SeriesDetailViewModel.PlayEpisodeCommand`）
+- **THEN** 系统先调用 `_navigation.NavigateTo(typeof(PlayerPage), target)`
+- **THEN** 系统再 `await _playback.PlayVideoAsync(target)`
+
+#### Scenario: 服务层等待渲染器就绪
+- **WHEN** `PlaybackControlService.PlayVideoAsync` 调用
+- **THEN** 在 `_mpv.LoadFileAsync(...)` 前调用 `await _mpv.WaitForRendererReadyAsync(TimeSpan.FromSeconds(10))`
+- **THEN** 只有在渲染器就绪后才发送 `loadfile` 命令
+
+#### Scenario: 超时后仍继续加载（降级）
+- **WHEN** `WaitForRendererReadyAsync` 超时未就绪
+- **THEN** 系统记录警告日志但仍然发送 loadfile（避免完全阅不到视频事件）
+
+### Requirement: mpv 诊断日志转发
+系统 SHALL 启用 mpv 内部日志输出并转发到应用 ILogger。
+
+#### Scenario: 启用 mpv 日志
+- **WHEN** `mpv_initialize` 成功
+- **THEN** 系统调用 `mpv_request_log_messages("info")` 订阅 info 及以上级别日志
+
+#### Scenario: 转发 LOG_MESSAGE 事件
+- **WHEN** 事件循环收到 `MPV_EVENT_LOG_MESSAGE`（id=2）
+- **THEN** 系统解析 `mpv_event_log_message` 结构体获取 prefix/level/text
+- **THEN** 系统按 mpv level 转发到 ILogger 的对应级别（fatal/error->Error, warn->Warning, info->Information, 其他->Debug）
+

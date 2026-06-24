@@ -49,6 +49,9 @@ public unsafe class MpvPlayerService : IMpvPlayerService
     private bool _disposed;
     private TimeSpan _duration;
     private TimeSpan _position;
+    private TimeSpan _seekTargetPosition;
+    private bool _seekInProgress;
+    private DateTime _seekStartedAt;
     private double _volume = 100;
     private double _speed = 1.0;
     private PlaybackState _state = PlaybackState.Idle;
@@ -292,17 +295,29 @@ public unsafe class MpvPlayerService : IMpvPlayerService
 
     public void Seek(TimeSpan position)
     {
+        System.Diagnostics.Debug.WriteLine($"[MpvPlayerService] Seek called: position={position.TotalSeconds}s");
         _position = position < TimeSpan.Zero ? TimeSpan.Zero : position;
-        TryCommand($"seek {_position.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture)} absolute");
+        // 记录 seek 目标位置，报制 _positionTimer 在 mpv 完成 seek 前回写旧位置
+        _seekTargetPosition = _position;
+        _seekInProgress = true;
+        _seekStartedAt = DateTime.UtcNow;
+        var command = $"seek {_position.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture)} absolute";
+        System.Diagnostics.Debug.WriteLine($"[MpvPlayerService] Executing mpv command: {command}");
+        TryCommand(command);
+        System.Diagnostics.Debug.WriteLine($"[MpvPlayerService] Seek command sent, invoking PositionChanged event");
         PositionChanged?.Invoke(this, _position);
     }
 
     public void SeekRelative(double seconds)
     {
-        TryCommand($"seek {seconds.ToString("0.###", CultureInfo.InvariantCulture)} relative");
         var next = _position + TimeSpan.FromSeconds(seconds);
         if (next < TimeSpan.Zero) next = TimeSpan.Zero;
         if (_duration > TimeSpan.Zero && next > _duration) next = _duration;
+        // 记录 seek 目标位置，报制回写
+        _seekTargetPosition = next;
+        _seekInProgress = true;
+        _seekStartedAt = DateTime.UtcNow;
+        TryCommand($"seek {seconds.ToString("0.###", CultureInfo.InvariantCulture)} relative");
         _position = next;
         PositionChanged?.Invoke(this, _position);
     }
@@ -526,6 +541,8 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                         break;
                     case 21: // MPV_EVENT_PLAYBACK_RESTART
                         _logger.LogInformation("收到 MPV_EVENT_PLAYBACK_RESTART");
+                        // mpv 完成 seek，解除位置抽制
+                        _seekInProgress = false;
                         break;
                     case 23: // MPV_EVENT_VIDEO_RECONFIG
                         _logger.LogInformation("收到 MPV_EVENT_VIDEO_RECONFIG");
@@ -833,7 +850,30 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                 var posStr = TryGetProperty("time-pos");
                 var durStr = TryGetProperty("duration");
                 if (double.TryParse(posStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var pos))
-                    _position = TimeSpan.FromSeconds(pos);
+                {
+                    var newPos = TimeSpan.FromSeconds(pos);
+
+                    if (_seekInProgress)
+                    {
+                        // seek 期间：检查 mpv 是否已到达目标位置
+                        var diff = Math.Abs((newPos - _seekTargetPosition).TotalSeconds);
+                        var elapsed = (DateTime.UtcNow - _seekStartedAt).TotalSeconds;
+                        if (diff < 1.5 || elapsed > 5.0)
+                        {
+                            // 接近目标或已超时，解除 seek 抑制
+                            _seekInProgress = false;
+                            _position = newPos;
+                            // 触发一次 PositionChanged 通知 UI 更新
+                            PositionChanged?.Invoke(this, _position);
+                        }
+                        // 否则完全跳过本次 tick（不更新 _position，不触发事件）
+                    }
+                    else
+                    {
+                        _position = newPos;
+                        PositionChanged?.Invoke(this, _position);
+                    }
+                }
                 if (double.TryParse(durStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var dur))
                     _duration = TimeSpan.FromSeconds(dur);
             }
@@ -848,8 +888,8 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                     FileEnded?.Invoke(this, EventArgs.Empty);
                     return;
                 }
+                PositionChanged?.Invoke(this, _position);
             }
-            PositionChanged?.Invoke(this, _position);
         }
         catch (Exception ex)
         {

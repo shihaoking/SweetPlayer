@@ -153,7 +153,8 @@
 
             <StackPanel Spacing="10">
                 <!-- 进度条行 -->
-                <Grid>
+                <Grid PointerPressed="OnProgressGridPointerPressed"
+                      PointerReleased="OnProgressGridPointerReleased">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -172,14 +173,17 @@
                             x:Name="ProgressSlider"
                             Minimum="0"
                             Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
-                            Value="{x:Bind ViewModel.PositionSeconds, Mode=TwoWay}"
+                            Value="{x:Bind ViewModel.PositionSeconds, Mode=OneWay}"
                             StepFrequency="1"
                             SmallChange="1"
                             LargeChange="10"
                             VerticalAlignment="Center"
+                            ValueChanged="OnProgressSliderValueChanged"
                             PointerPressed="OnSliderPointerPressed"
                             PointerReleased="OnSliderPointerReleased"
-                            PointerCaptureLost="OnSliderPointerReleased" />
+                            PointerCanceled="OnSliderPointerReleased"
+                            PointerCaptureLost="OnSliderPointerReleased"
+                            Tapped="OnSliderTapped" />
 
                     <TextBlock Grid.Column="2"
                                Text="{x:Bind ViewModel.DurationText, Mode=OneWay}"

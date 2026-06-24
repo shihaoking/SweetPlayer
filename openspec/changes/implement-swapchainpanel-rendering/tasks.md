@@ -70,9 +70,9 @@
 - [x] 9.2 验证视频画面在 SwapChainPanel 中正确渲染
 - [x] 9.3 测试窗口尺寸调整，验证画面自适应
 - [x] 9.4 测试全屏切换功能
-- [ ] 9.5 测试快进、快退、暂停等播放控制功能
-- [ ] 9.6 验证退出播放时资源正确释放
-- [ ] 9.7 测试在 libmpv 不可用时的降级行为
+- [x] 9.5 测试快进、快退、暂停等播放控制功能
+- [x] 9.6 验证退出播放时资源正确释放
+- [x] 9.7 测试在 libmpv 不可用时的降级行为
 
 ## 10. sw 渲染路径代替方案
 
@@ -109,3 +109,15 @@
 - [x] 14.1 `mpv_initialize` 后调用 `mpv_request_log_messages("info")`
 - [x] 14.2 事件循环处理 `MPV_EVENT_LOG_MESSAGE`（id=2）并按 mpv level 转发到 ILogger
 - [x] 14.3 事件循环记录关键事件详情：START_FILE/FILE_LOADED/PLAYBACK_RESTART/VIDEO_RECONFIG
+
+## 15. 进度条交互问题修复（额外任务）
+
+- [x] 15.1 诊断 Slider 事件不触发问题（PointerPressed/Released、ManipulationStarted/Completed）
+- [x] 15.2 实现基于 ValueChanged 值变化特征的智能拖动检测（阈值 > 5.0 秒）
+- [x] 15.3 添加双重状态跟踪机制（本地 `_isDragging` + ViewModel `IsUserSeeking`）
+- [x] 15.4 在 Slider 和父 Grid 上绑定 Pointer 事件，使用 `e.Handled = true` 阻止冒泡
+- [x] 15.5 实现 `FindParent<T>` 辅助方法，沿 Visual Tree 查找父控件
+- [x] 15.6 添加分层调试日志（UI 层、ViewModel 层、Service 层）
+- [x] 15.7 验证拖动进度条快进/快退功能正常工作
+- [x] 15.8 验证点击进度条跳转功能正常工作
+- [x] 15.9 编写实施总结文档 `PROGRESS_BAR_FIX_SUMMARY.md`

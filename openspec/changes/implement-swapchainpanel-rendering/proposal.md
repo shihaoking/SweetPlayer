@@ -10,6 +10,17 @@
 - 调用 mpv_render_context_render 更新帧并将纹理呈现到 SwapChainPanel
 - 确保点击播放视频时正确加载和使用 PlayerPage.xaml
 
+### 实际落地中额外增加的关键变更（见 design.md Implementation Notes）
+
+- 采用 `MPV_RENDER_API_TYPE_SW` 代替 D3D11 API（避开 LibMpv.Client + libmpv-2.dll 集成险坑）
+- D3D11 设备创建与所有 ImmediateContext 调用集中在专用 `MpvRenderThread` 上进行（避开跨线程 `MapSubresource` 返回 E_INVALIDARG）
+- SwapChainPanel 关联与 Present 必须通过 `SynchronizationContext.Post` 分派回 UI 线程
+- SwapChain 使用逻辑像素尺寸，不乘以 DPI
+- **增加渲染器就绪同步原语**：`IMpvPlayerService.IsRendererReady` / `WaitForRendererReadyAsync(timeout)`，以 `TaskCompletionSource<bool>` 实现，避免 `loadfile` 在 `mpv_render_context_create` 之前执行导致的 `vo/libmpv: No render context set` 间歇性黑屏
+- **业务层调整**：`MovieDetailViewModel` / `SeriesDetailViewModel` 先 `NavigateTo(PlayerPage)` 再 `PlayVideoAsync`；`PlaybackControlService.PlayVideoAsync` 在 `LoadFileAsync` 前 `await WaitForRendererReadyAsync(10s)`
+- **mpv 诊断能力**：启用 `mpv_request_log_messages("info")`，事件循环转发 `MPV_EVENT_LOG_MESSAGE` 到 ILogger
+- **进度条交互修复**：解决 WinUI 3 Slider 控件 Pointer/Manipulation 事件不触发的问题，采用基于 ValueChanged 值变化特征的智能拖动检测（阈值 > 5.0 秒），实现可靠的拖拽和点击跳转功能
+
 ## Capabilities
 
 ### New Capabilities

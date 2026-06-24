@@ -142,6 +142,11 @@ public sealed partial class PlayerViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isUserSeeking;
 
+    partial void OnIsUserSeekingChanged(bool value)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PlayerVM] IsUserSeeking changed to: {value}");
+    }
+
     public string CurrentTimeText => FormatTime(TimeSpan.FromSeconds(PositionSeconds));
     public string DurationText => FormatTime(TimeSpan.FromSeconds(DurationSeconds));
 
@@ -447,24 +452,45 @@ public sealed partial class PlayerViewModel : ViewModelBase
     /// <summary>用户结束 Slider 拖拽，提交跳转。</summary>
     public void CommitSeekFromSlider()
     {
+        var targetSec = PositionSeconds;
+        System.Diagnostics.Debug.WriteLine($"[PlayerVM] CommitSeekFromSlider: target={targetSec}s, duration={DurationSeconds}s");
         IsUserSeeking = false;
-        var target = TimeSpan.FromSeconds(PositionSeconds);
+        var target = TimeSpan.FromSeconds(targetSec);
         _suppressSeekFeedback = true;
+        _seekTargetSeconds = targetSec;
+        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Calling _playback.MpvPlayer.Seek({target})");
         _playback.MpvPlayer.Seek(target);
+        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Seek call completed");
     }
+
+    private double _seekTargetSeconds;
 
     private void OnPositionChanged(object? sender, TimeSpan position)
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
             if (IsUserSeeking) return;
-            PositionSeconds = position.TotalSeconds;
+
+            // 提交 seek 后，只有在 mpv 报告接近目标位置时才解除抽制，避免被旧位置覆盖
+            if (_suppressSeekFeedback)
+            {
+                if (Math.Abs(position.TotalSeconds - _seekTargetSeconds) < 1.5)
+                {
+                    _suppressSeekFeedback = false;
+                    PositionSeconds = position.TotalSeconds;
+                }
+                // 否则丢弃本次回写（mpv seek 未完成）
+            }
+            else
+            {
+                PositionSeconds = position.TotalSeconds;
+            }
+
             var dur = _playback.Duration.TotalSeconds;
             if (dur > 0 && Math.Abs(DurationSeconds - dur) > 0.5)
             {
                 DurationSeconds = dur;
             }
-            _suppressSeekFeedback = false;
             CheckUpNext();
         });
     }
