@@ -35,6 +35,8 @@ public unsafe class MpvPlayerService : IMpvPlayerService
     private MpvRenderContextSetUpdateCallbackCallback? _updateCallbackDelegate;
     private long _renderedFrameCount;
     private long _callbackCount;
+    private DateTime _lastWarnTime = DateTime.MinValue;
+    private readonly TaskCompletionSource<bool> _rendererReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private SynchronizationContext? _uiSyncContext;
     private IntPtr _swapChainPanelHandle;
     private int _initWidth;
@@ -62,6 +64,14 @@ public unsafe class MpvPlayerService : IMpvPlayerService
     public bool IsPaused => _state == PlaybackState.Paused;
     public TimeSpan Position => _position;
     public TimeSpan Duration => _duration;
+    public bool IsRendererReady => _rendererReadyTcs.Task.IsCompletedSuccessfully;
+
+    public Task WaitForRendererReadyAsync(TimeSpan timeout)
+    {
+        var readyTask = _rendererReadyTcs.Task;
+        if (readyTask.IsCompleted) return Task.CompletedTask;
+        return RendererReadyWaiter.WaitAsync(readyTask, timeout, _logger);
+    }
 
     public double Volume
     {
@@ -166,6 +176,7 @@ public unsafe class MpvPlayerService : IMpvPlayerService
             }
 
             // SwapChain 关联到 SwapChainPanel 必须在 UI 线程
+            // 使用短超时同步，避免渲染线程在 SwapChain 未关联时就开始渲染
             if (_swapChainPanelHandle != IntPtr.Zero && _uiSyncContext is not null)
             {
                 var assocDone = new ManualResetEventSlim(false);
@@ -174,8 +185,8 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                     try
                     {
                         var nativePanel = Marshal.GetObjectForIUnknown(_swapChainPanelHandle) as ISwapChainPanelNative;
-                        _logger.LogInformation("ISwapChainPanelNative 解析: {Result}",
-                            nativePanel is not null ? "成功" : "失败(null)");
+                        _logger.LogInformation("ISwapChainPanelNative 解析：{Result}",
+                            nativePanel is not null ? "成功" : "失败 (null)");
                         if (nativePanel != null)
                         {
                             var hr = nativePanel.SetSwapChain(_swapChain.NativePointer);
@@ -191,12 +202,22 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                         assocDone.Set();
                     }
                 }, null);
-                assocDone.Wait(5000);
+                            
+                // 等待 UI 线程完成关联（短超时 1 秒，避免卡死）
+                if (!assocDone.Wait(1000))
+                {
+                    _logger.LogWarning("SetSwapChain 关联超时 (1s)，继续渲染");
+                }
                 assocDone.Dispose();
             }
 
             // 创建 mpv 渲染上下文并进入渲染循环
             CreateMpvRenderContext();
+
+            // 短暂延迟，确保所有初始化完成
+            Thread.Sleep(50);
+
+            _logger.LogInformation("即将进入渲染循环 (ThreadId={Tid})", Environment.CurrentManagedThreadId);
             RenderLoop(_renderCancellation!.Token);
         }
         catch (Exception ex)
@@ -407,6 +428,9 @@ public unsafe class MpvPlayerService : IMpvPlayerService
 
             // 渲染循环由 RenderThreadEntry 在当前线程启动
             _logger.LogInformation("mpv 渲染上下文准备就绪，即将进入渲染循环");
+
+            // 通知等待者：渲染上下文已准备就绪，可以安全调用 loadfile
+            _rendererReadyTcs.TrySetResult(true);
         }
         catch (Exception ex)
         {
@@ -420,6 +444,42 @@ public unsafe class MpvPlayerService : IMpvPlayerService
     {
         Interlocked.Increment(ref _callbackCount);
         _renderUpdateEvent?.Set();
+    }
+
+    /// <summary>
+    /// 转发 mpv 内部 LOG_MESSAGE 到应用日志，定位间歇性问题。
+    /// </summary>
+    private void TryLogMpvMessage(void* dataPtr)
+    {
+        if (dataPtr == null) return;
+        try
+        {
+            var msg = *(MpvEventLogMessage*)dataPtr;
+            var prefix = Marshal.PtrToStringUTF8((IntPtr)msg.Prefix) ?? "";
+            var level = Marshal.PtrToStringUTF8((IntPtr)msg.Level) ?? "";
+            var text = Marshal.PtrToStringUTF8((IntPtr)msg.Text) ?? "";
+            text = text.TrimEnd('\n', '\r');
+            switch (level)
+            {
+                case "fatal":
+                case "error":
+                    _logger.LogError("[mpv:{Prefix}] {Text}", prefix, text);
+                    break;
+                case "warn":
+                    _logger.LogWarning("[mpv:{Prefix}] {Text}", prefix, text);
+                    break;
+                case "info":
+                    _logger.LogInformation("[mpv:{Prefix}] {Text}", prefix, text);
+                    break;
+                default:
+                    _logger.LogDebug("[mpv:{Prefix}/{Level}] {Text}", prefix, level, text);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "解析 mpv 日志事件失败");
+        }
     }
 
     /// <summary>
@@ -452,6 +512,9 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                     case 1: // MPV_EVENT_SHUTDOWN
                         _logger.LogInformation("收到 MPV_EVENT_SHUTDOWN");
                         return;
+                    case 2: // MPV_EVENT_LOG_MESSAGE
+                        TryLogMpvMessage(mpvEvent.Data);
+                        break;
                     case 6: // MPV_EVENT_START_FILE
                         _logger.LogInformation("收到 MPV_EVENT_START_FILE");
                         break;
@@ -494,8 +557,23 @@ public unsafe class MpvPlayerService : IMpvPlayerService
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                // 等待更新回调或超时（短超时确保持续驱动 mpv 帧流水线）
-                _renderUpdateEvent?.Wait(16, cancellationToken);
+                // 仅在回调触发时渲染（让 mpv 按自己的节奏生产帧）
+                var signaled = _renderUpdateEvent?.Wait(100, cancellationToken) ?? false;
+                if (!signaled)
+                {
+                    // 超时：mpv 未产生新帧，继续等待
+                    var totalFrames = Interlocked.Read(ref _renderedFrameCount);
+                    var totalCb = Interlocked.Read(ref _callbackCount);
+                    // 首帧后连续超时警告（帮助定位间歇性问题）
+                    if (totalFrames == 1 && (DateTime.UtcNow - _lastWarnTime).TotalSeconds >= 1.0)
+                    {
+                        _lastWarnTime = DateTime.UtcNow;
+                        _logger.LogWarning("渲染帧停在#1，回调计数={Cb}，等待 mpv 产生新帧...", totalCb);
+                    }
+                    else if (totalFrames > 0 && totalFrames % 100 == 0)
+                        _logger.LogDebug("渲染等待超时，已渲染{Count}帧，回调{Cb}次", totalFrames, totalCb);
+                    continue;
+                }
                 _renderUpdateEvent?.Reset();
 
                 if (_renderContext == null || _swapChain == null || _d3d11Device == null)
@@ -551,7 +629,8 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                     if (_frameBuffer == null || _frameBuffer.Length != frameSize)
                     {
                         _frameBuffer = new byte[frameSize];
-                        _logger.LogInformation("分配帧缓冲区: {W}x{H}, stride={Stride}, size={Size} bytes", w, h, stride, frameSize);
+                        if (_renderedFrameCount == 0)
+                            _logger.LogInformation("分配帧缓冲区: {W}x{H}, stride={Stride}, size={Size} bytes", w, h, stride, frameSize);
                     }
 
                     // 让 mpv 渲染到 CPU 缓冲区
@@ -577,8 +656,9 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                             var ret = Mpv.MpvRenderContextRender(_renderContext, rpPtr);
                             if (ret < 0)
                             {
-                                _logger.LogWarning("mpv_render_context_render 失败: {Error} (code={Code})",
-                                    Mpv.MpvErrorString(ret), ret);
+                                if (_renderedFrameCount < 5)
+                                    _logger.LogWarning("mpv_render_context_render 失败: {Error} (code={Code})",
+                                        Mpv.MpvErrorString(ret), ret);
                                 continue;
                             }
                         }
@@ -617,7 +697,11 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                                 presentEvent.Set();
                             }
                         }, null);
-                        presentEvent.Wait(200);
+                        if (!presentEvent.Wait(200))
+                        {
+                            if (_renderedFrameCount < 5)
+                                _logger.LogWarning("Present 分派超时 (200ms)");
+                        }
                         presentEvent.Dispose();
                     }
                     else
@@ -634,12 +718,14 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                 catch (SharpDXException ex) when (ex.ResultCode == SharpDX.DXGI.ResultCode.DeviceRemoved ||
                                                    ex.ResultCode == SharpDX.DXGI.ResultCode.DeviceReset)
                 {
-                    _logger.LogError(ex, "D3D11 设备丢失或重置");
+                    _logger.LogError(ex, "D3D11 设备丢失或重置，渲染循环退出");
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "渲染循环中发生异常");
+                    // 单帧错误不应停止渲染循环
+                    if (_renderedFrameCount < 5 || _renderedFrameCount % 100 == 0)
+                        _logger.LogError(ex, "渲染循环异常 (帧#{Count})", _renderedFrameCount);
                 }
             }
         }
@@ -676,6 +762,10 @@ public unsafe class MpvPlayerService : IMpvPlayerService
             _logger.LogInformation("设置 vo=libmpv 返回值：{Ret}", voRet);
             Mpv.MpvSetOptionString(_mpvHandle, "keep-open", "yes");
             Mpv.MpvSetOptionString(_mpvHandle, "audio-fallback-to-null", "yes");
+
+            // 启用 mpv 内部日志输出（便于定位间歇性问题）
+            var logRet = Mpv.MpvRequestLogMessages(_mpvHandle, "info");
+            _logger.LogInformation("启用 mpv 日志输出，返回值：{Ret}", logRet);
 
             var ret = Mpv.MpvInitialize(_mpvHandle);
             if (ret != 0)

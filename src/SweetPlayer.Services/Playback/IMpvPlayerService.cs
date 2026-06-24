@@ -1,5 +1,23 @@
 namespace SweetPlayer.Services.Playback;
 
+using Microsoft.Extensions.Logging;
+
+/// <summary>
+/// 辅助类：在非 unsafe 上下文中等待任务完成（带超时）。
+/// MpvPlayerService 类为 unsafe，不能在其中使用 await，故抽出到这里。
+/// </summary>
+internal static class RendererReadyWaiter
+{
+    public static async Task WaitAsync(Task<bool> readyTask, TimeSpan timeout, ILogger logger)
+    {
+        var completed = await Task.WhenAny(readyTask, Task.Delay(timeout)).ConfigureAwait(false);
+        if (completed != readyTask)
+        {
+            logger.LogWarning("等待渲染器就绪超时 ({Timeout}ms)", timeout.TotalMilliseconds);
+        }
+    }
+}
+
 /// <summary>
 /// 播放器状态枚举。
 /// </summary>
@@ -52,6 +70,12 @@ public interface IMpvPlayerService : IDisposable
     /// <param name="width">渲染区域宽度（像素）。</param>
     /// <param name="height">渲染区域高度（像素）。</param>
     void InitializeRenderer(IntPtr swapChainPanelHandle, int width, int height);
+
+    /// <summary>渲染上下文是否已创建完成。</summary>
+    bool IsRendererReady { get; }
+
+    /// <summary>等待渲染上下文创建完成（在调用 LoadFileAsync 前使用，避免 mpv vo 初始化时报 'No render context set'）。</summary>
+    Task WaitForRendererReadyAsync(TimeSpan timeout);
 
     /// <summary>渲染目标尺寸变化时调用。</summary>
     void Resize(int width, int height);

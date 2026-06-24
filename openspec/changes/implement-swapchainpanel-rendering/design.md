@@ -137,3 +137,72 @@
 3. **是否需要暴露渲染统计信息**？
    - 如 FPS、丢帧数等，用于调试和性能监控
    - 建议：可作为后续增强功能
+
+## Implementation Notes (实际实现与原初设计的重大偏差)
+
+在实际落地过程中发现多个原初设计未考虑的底层约束，需要记录以供后续维护参考。
+
+### 偏差 1：采用 sw 渲染 API 而非 d3d11 渲染 API
+**原设计**：使用 `MPV_RENDER_API_TYPE_D3D11`，传递 `MPV_RENDER_PARAM_D3D11_DEVICE`。
+**实际实现**：使用 `MPV_RENDER_API_TYPE_SW`（软件渲染模式），让 mpv 输出 BGR0 像素到应用提供的 CPU 内存，再用 `UpdateSubresource` 上传到 SwapChain 后缓冲区。
+**原因**：LibMpv.Client 1.0.0 与当前 libmpv-2.dll 的 D3D11 渲染 API 集成存在在本项目环境中难以调通的冗余问题，而 sw 渲染路径鲁棒且在今代硬件上性能足够。
+
+### 偏差 2：D3D11 设备创建于专用渲染线程
+**原设计**：未明确线程所属，隐含在 InitializeRenderer（UI 线程）创建。
+**实际约束**：D3D11 ImmediateContext 在未启用 `D3D11_CREATE_DEVICE_MULTITHREADED` 时具有线程亲和性：`MapSubresource` 从非创建设备的线程调用返回 `E_INVALIDARG (0x80070057)`。
+**修正方案**：所有 D3D11 资源创建与渲染调用集中在 `RenderThreadEntry` 专用 `Thread` 上执行。
+
+### 偏差 3：SwapChainPanel 关联与 Present 必须在 UI 线程
+**原设计**：未区分调用线程。
+**实际约束**：WinUI 3 的 `ISwapChainPanelNative.SetSwapChain` 和 `IDXGISwapChain.Present` 必须在 UI 线程调用，否则焦点丢失或帧不被合成。
+**修正方案**：`InitializeRenderer` 接收时捕获 `SynchronizationContext.Current`；SwapChain 关联和 Present 都通过 `SynchronizationContext.Post` 分派回 UI 线程。
+
+### 偏差 4：加载文件须等待渲染上下文就绪（关键）
+**原设计**：未考虑 mpv vo 初始化与 `mpv_render_context_create` 之间的严格顺序。
+**实际事故**：若 `loadfile` 在 `mpv_render_context_create` 之前执行，mpv vo 初始化时输出 `No render context set` 错误并永久禁用视频输出（`Video: no video`）。表现为间歇性有声无画面，取决于两者完成顺序的竞态。
+**修正方案**：
+1. 业务层：`MovieDetailViewModel` / `SeriesDetailViewModel` 先 `NavigateTo(PlayerPage)` 再 `PlayVideoAsync`（先创建控件才可能创建渲染器）。
+2. 服务层：`IMpvPlayerService` 增加 `IsRendererReady` 与 `WaitForRendererReadyAsync(timeout)`；MpvPlayerService 内部以 `TaskCompletionSource<bool>` 维护就绪信号，`mpv_render_context_create` 成功后 `TrySetResult(true)`。
+3. `PlaybackControlService.PlayVideoAsync` 在 `LoadFileAsync` 前 `await _mpv.WaitForRendererReadyAsync(TimeSpan.FromSeconds(10))`。
+
+### 偏差 5：SwapChain 使用逻辑像素尺寸
+**原设计**：传递 `int width / int height`，未明确单位。
+**实际约束**：WinUI 3 SwapChainPanel 内部处理 DPI 缩放，若传递物理像素（乘以 `RasterizationScale`）会造成 SwapChain 与面板不匹配的黑边。
+**修正方案**：始终使用 `VideoPanel.ActualWidth/ActualHeight` 逻辑像素传入。
+
+### 偏差 6：启用 mpv 内部日志用于诊断
+**原设计**：未提及。
+**实际需要**：间歇性问题难以从应用侧定位，必须获取 mpv 内部错误（如 `vo/libmpv: No render context set`）才能找到根因。
+**修正方案**：`mpv_initialize` 后立即调用 `mpv_request_log_messages("info")`；事件循环中处理 `MPV_EVENT_LOG_MESSAGE`（id=2）并按 mpv level 映射到 ILogger。
+
+### 最终架构示意
+```
+UI 线程                       事件循环线程               渲染线程 (MpvRenderThread)
+--------                       ------------------         ----------------------------
+MpvPlayerService.ctor()
+  TryInitializeMpv()
+    mpv_create / initialize
+    mpv_request_log_messages
+    Task.Run(EventLoop)  ----> mpv_wait_event 循环
+NavigateTo(PlayerPage)
+MpvPlayerControl.OnLoaded
+  AttachPlayer()
+  TryInitializeRenderer()
+    捕获 SynchronizationContext
+    启动 RenderThread       --------------------------> Device(BgraSupport|VideoSupport)
+                                                          SwapChain1 创建
+                              <---- Post SetSwapChain ---  (等待<=1s)
+  SetSwapChain
+                              ---- assocDone.Set()  --->  CreateMpvRenderContext("sw")
+                                                          SetUpdateCallback
+                                                          _rendererReadyTcs.TrySetResult(true)
+await WaitForRendererReady
+LoadFileAsync(loadfile cmd)
+                               <---- mpv 事件 ---       RenderLoop:
+                                                            Wait(_renderUpdateEvent, 100ms)
+                                                            mpv_render_context_render -> CPU 缓冲区
+                                                            UpdateSubresource(backBuffer, frameBuf)
+                              <---- Post Present ----      (等待<=200ms)
+SwapChain.Present
+```
+

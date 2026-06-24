@@ -112,10 +112,11 @@ public sealed partial class MovieDetailViewModel : ViewModelBase
     {
         var target = SelectedVersion ?? Versions.FirstOrDefault();
         if (target is null) return;
-        await _playback.PlayVideoAsync(target);
 
-        // 导航到播放页面
+        // 先导航到播放页面（创建渲染器），再加载视频
+        // 否则 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
         _navigation.NavigateTo(typeof(PlayerPage), target);
+        await _playback.PlayVideoAsync(target);
     }
 
     [RelayCommand]

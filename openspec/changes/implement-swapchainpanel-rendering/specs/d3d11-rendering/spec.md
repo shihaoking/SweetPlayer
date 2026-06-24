@@ -65,3 +65,60 @@
 - **WHEN** Dispose 被调用
 - **THEN** 系统调用 D3D11 设备的 Dispose 方法
 - **THEN** 系统释放所有关联的 D3D11 资源
+
+### Requirement: 采用 sw 渲染路径代替 D3D11 API以避开集成险坑
+系统 SHALL 使用 `MPV_RENDER_API_TYPE_SW` 创建 mpv 渲染上下文，让 mpv 输出 BGR0 像素到应用提供的 CPU 内存，再以 `UpdateSubresource` 上传到 SwapChain 后缓冲区。
+
+#### Scenario: 使用 sw API 创建渲染上下文
+- **WHEN** 调用 `mpv_render_context_create`
+- **THEN** 传递 `MPV_RENDER_PARAM_API_TYPE` = `"sw"`
+- **THEN** 不传递 `MPV_RENDER_PARAM_D3D11_DEVICE`
+
+#### Scenario: CPU 帧缓冲区接收 mpv 输出
+- **WHEN** mpv 准备输出帧
+- **THEN** 应用传递 `MPV_RENDER_PARAM_SW_SIZE`、`MPV_RENDER_PARAM_SW_FORMAT`(`bgr0`)、`MPV_RENDER_PARAM_SW_STRIDE`、`MPV_RENDER_PARAM_SW_POINTER`
+- **THEN** mpv 将解码后的帧写入应用 `byte[]` 缓冲区
+
+#### Scenario: UpdateSubresource 上传到后缓冲区避开 MapSubresource
+- **WHEN** mpv 完成一帧输出
+- **THEN** 系统获取 SwapChain BackBuffer 并调用 `DeviceContext.UpdateSubresource(backBuffer, 0, null, framePtr, stride, 0)`
+- **THEN** 系统 NEVER 调用 `MapSubresource`（在未启用 MULTITHREADED 设备的环境下会返回 E_INVALIDARG）
+
+### Requirement: D3D11 ImmediateContext 线程亲和性
+系统 SHALL 在专用渲染线程上创建 D3D11 设备并在同一线程调用所有 ImmediateContext 操作。
+
+#### Scenario: 创建专用渲染线程
+- **WHEN** `InitializeRenderer` 被调用
+- **THEN** 系统启动名为 `MpvRenderThread` 的专用 `Thread`（非线程池 Task）
+- **THEN** D3D11 Device、SwapChain、`mpv_render_context`、渲染循环都在该线程上创建/运行
+
+#### Scenario: 避免跨线程 ImmediateContext 调用
+- **WHEN** 任意 `MapSubresource` / `UpdateSubresource` / `CopyResource` 调用发生
+- **THEN** 调用线程必须是创建 D3D11 设备的同一线程
+
+### Requirement: D3D11 设备创建标志
+系统 SHALL 在创建 D3D11 设备时同时启用 `BgraSupport` 与 `VideoSupport`。
+
+#### Scenario: 设备创建标志
+- **WHEN** `new Device(DriverType.Hardware, ...)` 被调用
+- **THEN** flags = `DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport`
+- **THEN** Debug 构建可加 `DeviceCreationFlags.Debug`，不可用时回退到普通标志
+
+### Requirement: 渲染器就绪同步原语
+系统 SHALL 提供异步机制让上层能够等待 mpv 渲染上下文创建完成。
+
+#### Scenario: 提供就绪查询与等待 API
+- **WHEN** 调用方需要同步渲染器状态
+- **THEN** `IMpvPlayerService.IsRendererReady` 返回 `mpv_render_context` 是否创建成功
+- **THEN** `IMpvPlayerService.WaitForRendererReadyAsync(TimeSpan timeout)` 返回可 await 的 Task，在超时或就绪时完成
+
+#### Scenario: 渲染上下文创建成功后信号释放
+- **WHEN** `mpv_render_context_create` 返回 0
+- **THEN** 系统的 `TaskCompletionSource<bool>` 调用 `TrySetResult(true)`
+- **THEN** 所有等待 `WaitForRendererReadyAsync` 的调用方被唤醒
+
+#### Scenario: 避免 unsafe 上下文中使用 await
+- **WHEN** `MpvPlayerService` 是 unsafe 类
+- **THEN** `WaitForRendererReadyAsync` 仅返回从辅助类（`RendererReadyWaiter`）获取的 Task
+- **THEN** 该辅助类为非 unsafe，允许内部使用 await
+

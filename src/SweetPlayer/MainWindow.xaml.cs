@@ -19,8 +19,19 @@ public sealed partial class MainWindow : Window
             ?? new NavigationService();
         _navigationService.Frame = ContentFrame;
 
+        // 监听导航事件，播放页面时隐藏侧边栏
+        ContentFrame.Navigated += OnFrameNavigated;
+
         // 默认选中首页
         RootNavigationView.SelectedItem = RootNavigationView.MenuItems[0];
+    }
+
+    private void OnFrameNavigated(object sender, Microsoft.UI.Xaml.Navigation.NavigationEventArgs e)
+    {
+        // 播放页面隐藏侧边栏，其他页面显示
+        var isPlayerPage = e.Content is PlayerPage;
+        RootNavigationView.IsPaneVisible = !isPlayerPage;
+        RootNavigationView.IsSettingsVisible = !isPlayerPage;
     }
 
     private void RootNavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)

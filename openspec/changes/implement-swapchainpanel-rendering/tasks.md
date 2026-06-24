@@ -67,9 +67,45 @@
 ## 9. 测试和验证
 
 - [x] 9.1 运行应用并点击播放视频，验证正确导航到 PlayerPage
-- [ ] 9.2 验证视频画面在 SwapChainPanel 中正确渲染
-- [ ] 9.3 测试窗口尺寸调整，验证画面自适应
-- [ ] 9.4 测试全屏切换功能
+- [x] 9.2 验证视频画面在 SwapChainPanel 中正确渲染
+- [x] 9.3 测试窗口尺寸调整，验证画面自适应
+- [x] 9.4 测试全屏切换功能
 - [ ] 9.5 测试快进、快退、暂停等播放控制功能
 - [ ] 9.6 验证退出播放时资源正确释放
 - [ ] 9.7 测试在 libmpv 不可用时的降级行为
+
+## 10. sw 渲染路径代替方案
+
+- [x] 10.1 使用 `MPV_RENDER_API_TYPE_SW` 创建渲染上下文（代替 d3d11）
+- [x] 10.2 分配 CPU 帧缓冲区（`byte[]`）接收 mpv BGR0 帧输出
+- [x] 10.3 使用 `UpdateSubresource` 将 CPU 帧上传到 SwapChain 后缓冲区、避开 `MapSubresource` 的 `E_INVALIDARG`
+
+## 11. D3D11 线程亲和性修复
+
+- [x] 11.1 创建专用 `Thread`（`MpvRenderThread`）运行 `RenderThreadEntry`
+- [x] 11.2 在该线程上创建 D3D11 Device、SwapChain、`mpv_render_context`、运行渲染循环
+- [x] 11.3 D3D11 Device 的 `BgraSupport | VideoSupport` 标志设置
+- [x] 11.4 在事件循环与渲染线程之间用事件信号（`ManualResetEventSlim`）同步帧生成
+
+## 12. UI 线程同步与资源关联
+
+- [x] 12.1 在 `InitializeRenderer` 中捕获 `SynchronizationContext.Current`
+- [x] 12.2 通过 `SynchronizationContext.Post` 分派 `ISwapChainPanelNative.SetSwapChain` 到 UI 线程，超时 1s
+- [x] 12.3 通过 `SynchronizationContext.Post` 分派 `IDXGISwapChain.Present` 到 UI 线程，超时 200ms
+- [x] 12.4 SwapChain 尺寸使用 `SwapChainPanel.ActualWidth/ActualHeight` 逻辑像素，不乘以 DPI
+
+## 13. 渲染器就绪同步原语（解决间歇性无画面）
+
+- [x] 13.1 `IMpvPlayerService` 增加 `IsRendererReady` 属性
+- [x] 13.2 `IMpvPlayerService` 增加 `Task WaitForRendererReadyAsync(TimeSpan timeout)`
+- [x] 13.3 `MpvPlayerService` 内部以 `TaskCompletionSource<bool>` 维护就绪信号
+- [x] 13.4 `mpv_render_context_create` 成功后 `_rendererReadyTcs.TrySetResult(true)`
+- [x] 13.5 抽出 `RendererReadyWaiter.WaitAsync` 到非 unsafe 辅助类（unsafe 上下文不允许 await）
+- [x] 13.6 `PlaybackControlService.PlayVideoAsync` 在 `LoadFileAsync` 前 `await WaitForRendererReadyAsync(10s)`
+- [x] 13.7 `MovieDetailViewModel` / `SeriesDetailViewModel` 调整为先 `NavigateTo(PlayerPage)` 再 `PlayVideoAsync`
+
+## 14. mpv 诊断与可观测性
+
+- [x] 14.1 `mpv_initialize` 后调用 `mpv_request_log_messages("info")`
+- [x] 14.2 事件循环处理 `MPV_EVENT_LOG_MESSAGE`（id=2）并按 mpv level 转发到 ILogger
+- [x] 14.3 事件循环记录关键事件详情：START_FILE/FILE_LOADED/PLAYBACK_RESTART/VIDEO_RECONFIG

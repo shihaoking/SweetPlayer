@@ -134,6 +134,8 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         }
 
         // 加载文件
+        // 等待渲染器就绪，避免 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
+        await _mpv.WaitForRendererReadyAsync(TimeSpan.FromSeconds(10));
         await _mpv.LoadFileAsync(videoFile.FullPath);
 
         // 恢复上次播放进度

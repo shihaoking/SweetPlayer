@@ -179,10 +179,11 @@ public sealed partial class SeriesDetailViewModel : ViewModelBase
     private async Task PlayEpisodeAsync(EpisodeItem? episode)
     {
         if (episode?.File is null) return;
-        await _playback.PlayVideoAsync(episode.File);
 
-        // 导航到播放页面
+        // 先导航到播放页面（创建渲染器），再加载视频
+        // 否则 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
         _navigation.NavigateTo(typeof(PlayerPage), episode.File);
+        await _playback.PlayVideoAsync(episode.File);
     }
 
     [RelayCommand]
