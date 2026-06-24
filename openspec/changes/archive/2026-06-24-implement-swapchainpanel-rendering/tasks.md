@@ -121,3 +121,30 @@
 - [x] 15.7 验证拖动进度条快进/快退功能正常工作
 - [x] 15.8 验证点击进度条跳转功能正常工作
 - [x] 15.9 编写实施总结文档 `PROGRESS_BAR_FIX_SUMMARY.md`
+
+## 16. 播放进度恢复与渲染同步问题修复（第二轮）
+
+- [x] 16.1 修复 seek 命令时序问题：添加 800ms 延迟确保 mpv 完成文件加载
+- [x] 16.2 修复 IsUserSeeking 标志未重置导致进度条冻结问题
+- [x] 16.3 在 OnPositionChanged 中添加自动重置 IsUserSeeking 逻辑
+- [x] 16.4 修复 DisposeRenderer 未重置渲染事件和计数器导致多次播放无画面问题
+- [x] 16.5 重置 `_renderUpdateEvent` 状态，确保下次播放时处于未触发状态
+- [x] 16.6 重置 `_renderedFrameCount` 和 `_callbackCount` 计数器
+- [x] 16.7 调整进度恢复阈值从 5秒 改为 3秒
+- [x] 16.8 添加详细诊断日志跟踪 IsUserSeeking 状态变化
+- [x] 16.9 验证多次播放（4次以上）都有画面和声音
+- [x] 16.10 验证进度恢复后视频从正确位置播放
+- [x] 16.11 验证进度恢复后进度条正常更新
+
+## 17. 用户设置开关功能实现
+
+- [x] 17.1 创建 IUserSettingsService 接口（AutoResumePlayback 属性）
+- [x] 17.2 实现 UserSettingsService（JSON 文件持久化到 %AppData%\SweetPlayer\user_settings.json）
+- [x] 17.3 在 App.xaml.cs 中注册设置服务并在启动时加载设置
+- [x] 17.4 在 PlaybackControlService 中注入 IUserSettingsService
+- [x] 17.5 根据用户设置决定是否恢复播放进度
+- [x] 17.6 创建 SettingsViewModel（ObservableProperty + 属性变更回调）
+- [x] 17.7 在 SettingsPage.xaml 添加"播放设置"卡片和 ToggleSwitch 开关
+- [x] 17.8 设置 UI 绑定和说明文字
+- [x] 17.9 验证设置开关功能正常工作
+- [x] 17.10 编写完整的实施总结文档 `PLAYBACK_RESUME_FIX_SUMMARY.md`

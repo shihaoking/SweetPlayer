@@ -20,6 +20,12 @@
 - **业务层调整**：`MovieDetailViewModel` / `SeriesDetailViewModel` 先 `NavigateTo(PlayerPage)` 再 `PlayVideoAsync`；`PlaybackControlService.PlayVideoAsync` 在 `LoadFileAsync` 前 `await WaitForRendererReadyAsync(10s)`
 - **mpv 诊断能力**：启用 `mpv_request_log_messages("info")`，事件循环转发 `MPV_EVENT_LOG_MESSAGE` 到 ILogger
 - **进度条交互修复**：解决 WinUI 3 Slider 控件 Pointer/Manipulation 事件不触发的问题，采用基于 ValueChanged 值变化特征的智能拖动检测（阈值 > 5.0 秒），实现可靠的拖拽和点击跳转功能
+- **播放进度恢复与渲染同步修复**：
+  - 修复 seek 命令时序问题，添加 800ms 延迟确保 mpv 完成文件加载后再执行 seek
+  - 修复 IsUserSeeking 标志未重置导致进度条冻结问题，在 OnPositionChanged 中自动重置
+  - 修复 DisposeRenderer 未重置渲染事件和计数器导致多次播放无画面问题
+  - 调整进度恢复阈值从 5秒 改为 3秒，提升用户体验
+- **用户可配置进度恢复**：添加 IUserSettingsService 和设置页面 UI，用户可通过开关控制是否自动恢复播放进度（默认启用，阈值 3秒）
 
 ## Capabilities
 

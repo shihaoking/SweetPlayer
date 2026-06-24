@@ -461,6 +461,9 @@ public sealed partial class PlayerViewModel : ViewModelBase
         System.Diagnostics.Debug.WriteLine($"[PlayerVM] Calling _playback.MpvPlayer.Seek({target})");
         _playback.MpvPlayer.Seek(target);
         System.Diagnostics.Debug.WriteLine($"[PlayerVM] Seek call completed");
+        
+        // 确保 IsUserSeeking 在 seek 完成后保持为 false，让后续的位置更新能够同步到 UI
+        IsUserSeeking = false;
     }
 
     private double _seekTargetSeconds;
@@ -469,8 +472,6 @@ public sealed partial class PlayerViewModel : ViewModelBase
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
-            if (IsUserSeeking) return;
-
             // 提交 seek 后，只有在 mpv 报告接近目标位置时才解除抽制，避免被旧位置覆盖
             if (_suppressSeekFeedback)
             {
@@ -478,11 +479,23 @@ public sealed partial class PlayerViewModel : ViewModelBase
                 {
                     _suppressSeekFeedback = false;
                     PositionSeconds = position.TotalSeconds;
+                    // 确保 IsUserSeeking 在 seek 完成后被重置
+                    if (IsUserSeeking)
+                    {
+                        IsUserSeeking = false;
+                        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Reset IsUserSeeking to false after seek completed");
+                    }
                 }
                 // 否则丢弃本次回写（mpv seek 未完成）
             }
             else
             {
+                // 正常播放时，如果 IsUserSeeking 仍然为 true，也重置它
+                if (IsUserSeeking)
+                {
+                    IsUserSeeking = false;
+                    System.Diagnostics.Debug.WriteLine($"[PlayerVM] Reset IsUserSeeking to false during normal playback");
+                }
                 PositionSeconds = position.TotalSeconds;
             }
 

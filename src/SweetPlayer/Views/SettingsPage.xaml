@@ -54,6 +54,30 @@
                        TextWrapping="Wrap"
                        Margin="0,12,0,0" />
 
+            <!-- 播放设置 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="16"
+                    Margin="0,20,0,0">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="播放设置"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               FontWeight="SemiBold" />
+                    
+                    <ToggleSwitch x:Name="AutoResumeToggle"
+                                  Header="自动恢复播放进度"
+                                  IsOn="{x:Bind ViewModel.AutoResumePlayback, Mode=TwoWay}"
+                                  Margin="0,8,0,0" />
+                    
+                    <TextBlock Text="开启后，再次播放视频时将从上次离开的位置继续播放"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Opacity="0.6"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
             <!-- 版权 -->
             <TextBlock Text="© 2024 SweetPlayer"
                        Style="{StaticResource CaptionTextBlockStyle}"

@@ -65,11 +65,13 @@ public sealed partial class PlayerPage : Page
 
         // 调试：检查控件状态
         System.Diagnostics.Debug.WriteLine($"=== PlayerPage OnLoaded ===");
+        /**
         System.Diagnostics.Debug.WriteLine($"TopBar - Visibility: {TopBar.Visibility}, Opacity: {TopBar.Opacity}, ActualWidth: {TopBar.ActualWidth}, ActualHeight: {TopBar.ActualHeight}");
         System.Diagnostics.Debug.WriteLine($"BottomBar - Visibility: {BottomBar.Visibility}, Opacity: {BottomBar.Opacity}, ActualWidth: {BottomBar.ActualWidth}, ActualHeight: {BottomBar.ActualHeight}");
         System.Diagnostics.Debug.WriteLine($"CenterPlayButton - Visibility: {CenterPlayButton.Visibility}, Opacity: {CenterPlayButton.Opacity}, ActualWidth: {CenterPlayButton.ActualWidth}, ActualHeight: {CenterPlayButton.ActualHeight}");
         System.Diagnostics.Debug.WriteLine($"PlayerRoot - ActualWidth: {PlayerRoot.ActualWidth}, ActualHeight: {PlayerRoot.ActualHeight}");
         System.Diagnostics.Debug.WriteLine($"VideoPlayer - Visibility: {VideoPlayer.Visibility}, ActualWidth: {VideoPlayer.ActualWidth}, ActualHeight: {VideoPlayer.ActualHeight}");
+        **/
 
         // 初始 Speed 与 Volume 同步给 mpv（只赋值显示用，不重复触发）
         ViewModel.ShowOsdHandler = (msg, glyph) => Osd.Show(msg, glyph);

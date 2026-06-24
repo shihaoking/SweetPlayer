@@ -324,10 +324,92 @@ public unsafe class MpvPlayerService : IMpvPlayerService
 
     public void Stop()
     {
+        _logger.LogInformation("MpvPlayerService.Stop() 调用，当前位置：{Position}s", _position.TotalSeconds);
         TryCommand("stop");
         _positionTimer.Change(Timeout.Infinite, Timeout.Infinite);
         _position = TimeSpan.Zero;
+        _logger.LogInformation("位置已重置为零");
         UpdateState(PlaybackState.Stopped);
+    }
+
+    public void DisposeRenderer()
+    {
+        _logger.LogInformation("开始释放渲染资源...");
+
+        // 取消渲染循环
+        _renderCancellation?.Cancel();
+
+        // 等待渲染线程退出（最多5秒）
+        if (_renderThread is { IsAlive: true })
+        {
+            try { _renderThread.Join(TimeSpan.FromSeconds(5)); } catch { }
+        }
+
+        // 重置渲染更新事件（确保下次播放时处于未触发状态）
+        _renderUpdateEvent?.Reset();
+
+        // 重置渲染计数器
+        Interlocked.Exchange(ref _renderedFrameCount, 0);
+        Interlocked.Exchange(ref _callbackCount, 0);
+        _logger.LogInformation("渲染计数器和事件已重置");
+
+        // 释放渲染上下文
+        if (_renderContext != null)
+        {
+            try 
+            { 
+                Mpv.MpvRenderContextFree(_renderContext); 
+                _logger.LogInformation("mpv 渲染上下文已释放");
+            } 
+            catch (Exception ex) 
+            { 
+                _logger.LogWarning(ex, "释放 mpv 渲染上下文时发生异常"); 
+            }
+            _renderContext = null;
+        }
+
+        // 释放 SwapChain
+        if (_swapChain != null) 
+        { 
+            try 
+            { 
+                _swapChain.Dispose(); 
+                _logger.LogInformation("SwapChain 已释放");
+            } 
+            catch (Exception ex) 
+            { 
+                _logger.LogWarning(ex, "释放 SwapChain 时发生异常"); 
+            } 
+            _swapChain = null; 
+        }
+
+        // 释放 staging 纹理
+        if (_stagingTexture != null) 
+        { 
+            try 
+            { 
+                _stagingTexture.Dispose(); 
+            } 
+            catch { } 
+            _stagingTexture = null; 
+        }
+
+        // 释放 D3D11 设备
+        if (_d3d11Device != null) 
+        { 
+            try 
+            { 
+                _d3d11Device.Dispose(); 
+                _logger.LogInformation("D3D11 设备已释放");
+            } 
+            catch (Exception ex) 
+            { 
+                _logger.LogWarning(ex, "释放 D3D11 设备时发生异常"); 
+            } 
+            _d3d11Device = null; 
+        }
+
+        _logger.LogInformation("渲染资源释放完成");
     }
 
     public void SetSubtitleTrack(int trackId)
@@ -703,7 +785,11 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                         {
                             try
                             {
-                                _swapChain.Present(1, PresentFlags.None);
+                                // 检查资源是否已被释放
+                                if (_swapChain is not null && !cancellationToken.IsCancellationRequested)
+                                {
+                                    _swapChain.Present(1, PresentFlags.None);
+                                }
                             }
                             catch (Exception ex)
                             {
@@ -723,7 +809,11 @@ public unsafe class MpvPlayerService : IMpvPlayerService
                     }
                     else
                     {
-                        _swapChain.Present(1, PresentFlags.None);
+                        // 非 UI 线程场景，直接调用（需要检查 null）
+                        if (_swapChain is not null && !cancellationToken.IsCancellationRequested)
+                        {
+                            _swapChain.Present(1, PresentFlags.None);
+                        }
                     }
 
                     var fc = Interlocked.Increment(ref _renderedFrameCount);

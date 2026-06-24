@@ -77,7 +77,7 @@ public sealed partial class MpvPlayerControl : UserControl
             // 取 SwapChainPanel 的本机指针交给底层渲染。
             // WinUI 3 SwapChainPanel 内部处理 DPI 缩放，SwapChain 使用逻辑像素尺寸即可。
             var nativePtr = GetNativePointer(VideoPanel);
-            System.Diagnostics.Debug.WriteLine($"[MpvPlayerControl] GetNativePointer={nativePtr}, PanelSize={VideoPanel.ActualWidth}x{VideoPanel.ActualHeight}");
+            //System.Diagnostics.Debug.WriteLine($"[MpvPlayerControl] GetNativePointer={nativePtr}, PanelSize={VideoPanel.ActualWidth}x{VideoPanel.ActualHeight}");
             _player.InitializeRenderer(
                 nativePtr,
                 (int)VideoPanel.ActualWidth,

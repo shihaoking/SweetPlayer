@@ -101,6 +101,9 @@ public interface IMpvPlayerService : IDisposable
     /// <summary>停止播放并卸载文件。</summary>
     void Stop();
 
+    /// <summary>释放渲染上下文（SwapChain、D3D11 设备等），但保留 mpv 实例。用于退出播放页时清理资源。</summary>
+    void DisposeRenderer();
+
     /// <summary>切换字幕轨道（0 表示关闭）。</summary>
     void SetSubtitleTrack(int trackId);
 

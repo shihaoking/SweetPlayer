@@ -101,6 +101,10 @@ public partial class App : Application
         services.AddSingleton<IMediaScannerService, MediaScannerService>();
         services.AddSingleton<IDirectoryBrowseService, DirectoryBrowseService>();
 
+        // 用户设置服务
+        services.AddSingleton<SweetPlayer.Services.Settings.IUserSettingsService, 
+                            SweetPlayer.Services.Settings.UserSettingsService>();
+
         // HDR / 杜比检测服务
         services.AddSingleton<VideoAnalysisOptions>();
         services.AddSingleton<IVideoAnalysisService, VideoAnalysisService>();
@@ -166,6 +170,10 @@ public partial class App : Application
         _window = new MainWindow();
         Views.MainWindowAccessor.Current = _window;
         _window.Activate();
+
+        // 加载用户设置
+        var userSettings = Services.GetRequiredService<SweetPlayer.Services.Settings.IUserSettingsService>();
+        await userSettings.LoadAsync();
 
         // 启动刮削队列后台服务
         var scrapingQueue = Services.GetRequiredService<IScrapingQueueService>();

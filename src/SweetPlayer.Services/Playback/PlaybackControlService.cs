@@ -73,6 +73,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
     private readonly IPlaybackProgressService _progress;
     private readonly IWindowsHdrService _hdr;
     private readonly ILogger<PlaybackControlService> _logger;
+    private readonly SweetPlayer.Services.Settings.IUserSettingsService _userSettings;
     private readonly System.Threading.Timer _saveProgressTimer;
     private VideoFile? _currentVideo;
     private bool _hdrAutoEnabled;
@@ -82,11 +83,13 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         IMpvPlayerService mpv,
         IPlaybackProgressService progress,
         IWindowsHdrService hdr,
+        SweetPlayer.Services.Settings.IUserSettingsService userSettings,
         ILogger<PlaybackControlService> logger)
     {
         _mpv = mpv;
         _progress = progress;
         _hdr = hdr;
+        _userSettings = userSettings;
         _logger = logger;
 
         _mpv.PositionChanged += OnMpvPositionChanged;
@@ -138,14 +141,33 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         await _mpv.WaitForRendererReadyAsync(TimeSpan.FromSeconds(10));
         await _mpv.LoadFileAsync(videoFile.FullPath);
 
-        // 恢复上次播放进度
+        // 等待文件加载完成并且 mpv 准备好播放后再恢复进度
+        // 需要等待足够的时间让 mpv 完成内部初始化（包括音频解码器）
+        await Task.Delay(800);
+
+        // 恢复上次播放进度（根据用户设置决定是否恢复）
         try
         {
-            var saved = await _progress.GetProgressAsync(videoFile.Id);
-            if (saved is not null && !saved.IsCompleted && saved.Position > TimeSpan.FromSeconds(5))
+            if (_userSettings.AutoResumePlayback)
             {
-                _mpv.Seek(saved.Position);
-                _logger.LogInformation("恢复播放进度：{Position}", saved.Position);
+                var saved = await _progress.GetProgressAsync(videoFile.Id);
+                if (saved is not null && !saved.IsCompleted && saved.Position > TimeSpan.FromSeconds(3))
+                {
+                    _logger.LogInformation("从数据库加载进度：VideoId={VideoId}, Position={Position}s", videoFile.Id, saved.Position.TotalSeconds);
+                    _mpv.Seek(saved.Position);
+                    _logger.LogInformation("恢复播放进度：{Position}", saved.Position);
+                    
+                    // 恢复进度后，确保 UI 能够正常更新（重置 seek 状态）
+                    await Task.Delay(100);
+                }
+                else
+                {
+                    _logger.LogInformation("新视频无保存的进度或进度太短（<3秒），从头开始播放：VideoId={VideoId}", videoFile.Id);
+                }
+            }
+            else
+            {
+                _logger.LogInformation("用户设置禁用自动恢复进度，从头开始播放：VideoId={VideoId}", videoFile.Id);
             }
         }
         catch (Exception ex)
@@ -189,6 +211,10 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         }
 
         _mpv.Stop();
+        
+        // 释放渲染资源，避免下次播放时渲染上下文冲突
+        _mpv.DisposeRenderer();
+        
         _currentVideo = null;
 
         // 恢复 HDR 状态
@@ -231,6 +257,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         var dur = _mpv.Duration;
         if (dur <= TimeSpan.Zero) return;
 
+        _logger.LogInformation("保存进度：VideoId={VideoId}, Position={Position}s", _currentVideo.Id, pos.TotalSeconds);
         await _progress.SaveProgressAsync(_currentVideo.Id, pos, dur);
     }
 
