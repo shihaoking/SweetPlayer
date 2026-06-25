@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services.Detection;
+using SweetPlayer.Services.Settings;
 
 namespace SweetPlayer.Services.Playback;
 
@@ -73,7 +74,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
     private readonly IPlaybackProgressService _progress;
     private readonly IWindowsHdrService _hdr;
     private readonly ILogger<PlaybackControlService> _logger;
-    private readonly SweetPlayer.Services.Settings.IUserSettingsService _userSettings;
+    private readonly IUserSettingsService _userSettings;
     private readonly System.Threading.Timer _saveProgressTimer;
     private VideoFile? _currentVideo;
     private bool _hdrAutoEnabled;
@@ -83,7 +84,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         IMpvPlayerService mpv,
         IPlaybackProgressService progress,
         IWindowsHdrService hdr,
-        SweetPlayer.Services.Settings.IUserSettingsService userSettings,
+        IUserSettingsService userSettings,
         ILogger<PlaybackControlService> logger)
     {
         _mpv = mpv;
@@ -136,9 +137,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
             _logger.LogWarning(ex, "自动启用系统 HDR 失败");
         }
 
-        // 加载文件
-        // 等待渲染器就绪，避免 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
-        await _mpv.WaitForRendererReadyAsync(TimeSpan.FromSeconds(10));
+        // 加载文件（wid 模式无需等待渲染器就绪）
         await _mpv.LoadFileAsync(videoFile.FullPath);
 
         // 等待文件加载完成并且 mpv 准备好播放后再恢复进度
@@ -211,9 +210,6 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         }
 
         _mpv.Stop();
-        
-        // 释放渲染资源，避免下次播放时渲染上下文冲突
-        _mpv.DisposeRenderer();
         
         _currentVideo = null;
 

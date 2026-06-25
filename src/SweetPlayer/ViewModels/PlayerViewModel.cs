@@ -518,7 +518,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
 
     // ---------- OSD ----------
 
-    /// <summary>请求显示 OSD 通知；由 PlayerPage 通过该委托代理到 UI 控件。</summary>
+    /// <summary>请求显示 OSD 通知；由 PlayerWindowOverlay 通过该委托代理到 UI 控件。</summary>
     public Action<string, string>? ShowOsdHandler { get; set; }
 
     public void ShowOsd(string message, string glyph = "\uE767")

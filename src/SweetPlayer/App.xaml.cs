@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
+using Richasy.MpvKernel;
 using SweetPlayer.Core.Data;
 using SweetPlayer.Services;
 using SweetPlayer.Services.BackgroundTasks;
@@ -113,6 +114,7 @@ public partial class App : Application
 
         // 视频播放引擎
         services.AddSingleton<IMpvPlayerService, MpvPlayerService>();
+        services.AddTransient<PlayerWindow>();
         services.AddSingleton<IPlaybackProgressService, PlaybackProgressService>();
         services.AddSingleton<IPlaybackControlService, PlaybackControlService>();
         services.AddSingleton<IKeyboardShortcutService, KeyboardShortcutService>();
@@ -167,6 +169,9 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // 初始化 mpv DLL 加载路径
+        MpvNative.Initialize(System.IO.Path.Combine(AppContext.BaseDirectory, "libmpv-2.dll"));
+
         _window = new MainWindow();
         Views.MainWindowAccessor.Current = _window;
         _window.Activate();
