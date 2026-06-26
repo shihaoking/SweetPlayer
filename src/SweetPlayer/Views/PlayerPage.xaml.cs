@@ -14,16 +14,14 @@ namespace SweetPlayer.Views;
 /// </summary>
 public sealed partial class PlayerPage : Page
 {
-    private readonly IPlaybackControlService _playback;
     private readonly INavigationService _navigation;
+    private IPlaybackControlService? _playback;
     private PlayerWindow? _playerWindow;
     private PlayerViewModel? _viewModel;
 
     public PlayerPage()
     {
-        var sp = App.Services;
-        _playback = sp.GetRequiredService<IPlaybackControlService>();
-        _navigation = sp.GetRequiredService<INavigationService>();
+        _navigation = App.Services.GetRequiredService<INavigationService>();
         InitializeComponent();
     }
 
@@ -33,9 +31,13 @@ public sealed partial class PlayerPage : Page
 
         if (e.Parameter is VideoFile vf)
         {
-            // 从 DI 获取 PlayerWindow（Transient，每次播放创建新实例）
-            _playerWindow = App.Services.GetRequiredService<PlayerWindow>();
-            _viewModel = App.Services.GetRequiredService<PlayerViewModel>();
+            var sp = App.Services;
+
+            // 创建单个 mpv 实例，由 PlayerWindow 和 PlaybackControlService 共享
+            var mpv = sp.GetRequiredService<IMpvPlayerService>();
+            _playerWindow = ActivatorUtilities.CreateInstance<PlayerWindow>(sp, mpv);
+            _playback = ActivatorUtilities.CreateInstance<PlaybackControlService>(sp, mpv);
+            _viewModel = ActivatorUtilities.CreateInstance<PlayerViewModel>(sp, (IPlaybackControlService)_playback);
 
             // 初始化 ViewModel
             _viewModel.Initialize(vf);
@@ -56,18 +58,21 @@ public sealed partial class PlayerPage : Page
         }
     }
 
-    private void OnPlayerWindowClosed(object? sender, EventArgs e)
+    private async void OnPlayerWindowClosed(object? sender, EventArgs e)
     {
         if (_playerWindow is not null)
         {
             _playerWindow.Closed -= OnPlayerWindowClosed;
         }
 
-        _playback.Stop();
+        // 保存播放进度并清理 HDR 状态（mpv 实例已被 PlayerWindow.DisposeAsync 销毁）
+        if (_playback is not null)
+        {
+            await _playback.StopAsync();
+        }
 
         DispatcherQueue.TryEnqueue(() =>
         {
-            // 重新激活主窗口（AppWindow 关闭后不会自动归还焦点）
             var mainWindow = App.MainWindow ?? MainWindowAccessor.Current;
             mainWindow?.Activate();
 

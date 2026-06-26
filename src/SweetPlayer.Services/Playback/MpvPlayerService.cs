@@ -71,12 +71,6 @@ public class MpvPlayerService : IMpvPlayerService
     {
         _windowHandle = windowHandle;
 
-        if (_client is not null)
-        {
-            _logger.LogInformation("MpvClient 已初始化，跳过重复初始化");
-            return;
-        }
-
         _logger.LogInformation("初始化 MpvClient (wid={Handle})...", windowHandle);
 
         _client = await MpvClient.CreateAsync(logger: _logger);

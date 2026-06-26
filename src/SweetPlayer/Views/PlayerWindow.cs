@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
@@ -24,19 +23,6 @@ public sealed class PlayerWindow : IAsyncDisposable
     private bool _isFullScreen;
     private bool _disposed;
 
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool EnableWindow(IntPtr hWnd, bool bEnable);
-
-    [DllImport("user32.dll")]
-    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
-
-    private const uint RDW_INVALIDATE = 0x0001;
-    private const uint RDW_FRAME = 0x0400;
-    private const uint RDW_UPDATENOW = 0x0100;
-
     /// <summary>窗口句柄（HWND），供 mpv wid 模式使用。</summary>
     public IntPtr Handle { get; private set; }
 
@@ -53,6 +39,7 @@ public sealed class PlayerWindow : IAsyncDisposable
     {
         _mpv = mpv;
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+        Log("PlayerWindow 实例已创建");
     }
 
     /// <summary>
@@ -60,21 +47,29 @@ public sealed class PlayerWindow : IAsyncDisposable
     /// </summary>
     public async Task ShowAsync()
     {
+        Log("ShowAsync 开始");
+
         _appWindow = AppWindow.Create();
+        _appWindow.AssociateWithDispatcherQueue(_dispatcherQueue);
         _appWindow.Title = "SweetPlayer";
         _appWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));
         _appWindow.Destroying += OnWindowDestroying;
         _appWindow.Changed += OnWindowChanged;
+        Log($"AppWindow 已创建并关联 DispatcherQueue, Id={_appWindow.Id.Value}");
 
         // 获取 HWND
         Handle = Win32Interop.GetWindowFromWindowId(_appWindow.Id);
+        Log($"HWND 已获取: 0x{Handle:X}");
 
         // 初始化 mpv（传入 HWND）
+        Log("正在初始化 mpv...");
         await _mpv.InitializeAsync(Handle);
+        Log("mpv 初始化完成");
 
         // 创建 XAML 源
         _xamlSource = new DesktopWindowXamlSource();
         _xamlSource.Initialize(_appWindow.Id);
+        Log("DesktopWindowXamlSource 已创建并初始化");
 
         // 设置初始内容为空 Grid（黑色背景）
         var rootGrid = new Microsoft.UI.Xaml.Controls.Grid
@@ -87,6 +82,7 @@ public sealed class PlayerWindow : IAsyncDisposable
         UpdateXamlSourcePosition();
 
         _appWindow.Show();
+        Log("ShowAsync 完成, 窗口已显示");
     }
 
     /// <summary>
@@ -94,6 +90,7 @@ public sealed class PlayerWindow : IAsyncDisposable
     /// </summary>
     public void SetOverlayContent(UIElement content)
     {
+        Log($"SetOverlayContent: content={content.GetType().Name}");
         OverlayContent = content;
         if (_xamlSource is not null)
         {
@@ -104,6 +101,11 @@ public sealed class PlayerWindow : IAsyncDisposable
             rootGrid.Children.Add(content);
             _xamlSource.Content = rootGrid;
             UpdateXamlSourcePosition();
+            Log("SetOverlayContent 完成, XAML 内容已设置");
+        }
+        else
+        {
+            Log("SetOverlayContent 警告: _xamlSource 为 null, 跳过设置");
         }
     }
 
@@ -113,17 +115,23 @@ public sealed class PlayerWindow : IAsyncDisposable
     /// <returns>当前是否全屏。</returns>
     public bool ToggleFullScreen()
     {
-        if (_appWindow is null) return false;
+        if (_appWindow is null)
+        {
+            Log("ToggleFullScreen: _appWindow 为 null, 返回 false");
+            return false;
+        }
 
         if (_isFullScreen)
         {
             _appWindow.SetPresenter(AppWindowPresenterKind.Default);
             _isFullScreen = false;
+            Log("ToggleFullScreen: 退出全屏 → Default");
         }
         else
         {
             _appWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
             _isFullScreen = true;
+            Log("ToggleFullScreen: 进入全屏 → FullScreen");
         }
 
         return _isFullScreen;
@@ -137,14 +145,9 @@ public sealed class PlayerWindow : IAsyncDisposable
     /// </summary>
     public void Close()
     {
-        if (_appWindow is not null && !_disposed)
-        {
-            // 先清理 XAML 岛（必须在窗口销毁前完成，否则会破坏主窗口的非客户区）
-            _xamlSource?.Dispose();
-            _xamlSource = null;
-
-            _appWindow.Destroy();
-        }
+        Log($"Close 调用: _appWindow={(_appWindow is not null)}, _disposed={_disposed}");
+        _appWindow?.Destroy();
+        Log("Close: _appWindow.Destroy() 已调用");
     }
 
     /// <summary>
@@ -160,6 +163,7 @@ public sealed class PlayerWindow : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        Log($"DisposeAsync 调用: _disposed={_disposed}");
         if (_disposed) return;
         _disposed = true;
 
@@ -167,56 +171,53 @@ public sealed class PlayerWindow : IAsyncDisposable
         {
             _appWindow.Destroying -= OnWindowDestroying;
             _appWindow.Changed -= OnWindowChanged;
+            _appWindow.Destroy();
+            Log("DisposeAsync: AppWindow 已销毁");
         }
 
         _xamlSource?.Dispose();
-        _xamlSource = null;
+        Log("DisposeAsync: XamlSource 已 Dispose");
 
-        // 注意：不销毁 MpvClient（由 DI 管理 Singleton）
+        // 销毁 mpv 实例（与 MpvKernel 行为一致：窗口关闭即释放播放引擎）
+        await _mpv.DisposeAsync();
+        Log("DisposeAsync: MpvPlayerService 已 Dispose");
     }
 
     private void UpdateXamlSourcePosition()
     {
         if (_appWindow is null || _xamlSource is null) return;
 
-        var size = _appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
+        var isFullScreen = _appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen;
+        var size = isFullScreen
             ? _appWindow.Size
             : _appWindow.ClientSize;
 
         _xamlSource.SiteBridge.MoveAndResize(new Windows.Graphics.RectInt32(
             0, 0, size.Width, size.Height));
+        Log($"UpdateXamlSourcePosition: size={size.Width}x{size.Height}, fullScreen={isFullScreen}");
     }
 
     private async void OnWindowDestroying(AppWindow sender, object args)
     {
-        // 确保 XAML 岛已清理（如果 Close() 未提前清理）
-        if (_xamlSource is not null)
-        {
-            _xamlSource.Dispose();
-            _xamlSource = null;
-        }
-
+        Log("OnWindowDestroying 触发");
         Closed?.Invoke(this, EventArgs.Empty);
-
-        // 通过 Win32 强制恢复主窗口的标题栏和非客户区
-        var mainWindow = App.MainWindow ?? MainWindowAccessor.Current;
-        if (mainWindow is not null)
-        {
-            var mainHwnd = Win32Interop.GetWindowFromWindowId(mainWindow.AppWindow.Id);
-            EnableWindow(mainHwnd, true);
-            SetForegroundWindow(mainHwnd);
-            RedrawWindow(mainHwnd, IntPtr.Zero, IntPtr.Zero, RDW_INVALIDATE | RDW_FRAME | RDW_UPDATENOW);
-            mainWindow.Activate();
-        }
-
+        Log("OnWindowDestroying: Closed 事件已触发");
         await DisposeAsync();
+        Log("OnWindowDestroying 结束");
     }
 
     private void OnWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (args.DidSizeChange || args.DidVisibilityChange || args.DidPresenterChange)
         {
+            Log($"OnWindowChanged: DidSize={args.DidSizeChange}, DidVisibility={args.DidVisibilityChange}, DidPresenter={args.DidPresenterChange}");
             UpdateXamlSourcePosition();
         }
+    }
+
+    /// <summary>输出诊断日志到调试输出窗口。</summary>
+    private static void Log(string message)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PlayerWindow] {message}");
     }
 }

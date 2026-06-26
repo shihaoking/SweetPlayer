@@ -112,11 +112,11 @@ public partial class App : Application
         services.AddSingleton<IHdrDetectionService, HdrDetectionService>();
         services.AddSingleton<IWindowsHdrService, WindowsHdrService>();
 
-        // 视频播放引擎
-        services.AddSingleton<IMpvPlayerService, MpvPlayerService>();
+        // 视频播放引擎（Transient：每次播放创建新实例，窗口关闭即销毁）
+        services.AddTransient<IMpvPlayerService, MpvPlayerService>();
         services.AddTransient<PlayerWindow>();
         services.AddSingleton<IPlaybackProgressService, PlaybackProgressService>();
-        services.AddSingleton<IPlaybackControlService, PlaybackControlService>();
+        services.AddTransient<IPlaybackControlService, PlaybackControlService>();
         services.AddSingleton<IKeyboardShortcutService, KeyboardShortcutService>();
 
         // 字幕管理
