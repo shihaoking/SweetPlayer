@@ -84,6 +84,52 @@ mpv-kernel（`Richasy.MpvKernel.*`）是一个分层 .NET 封装库：
 - Services 层需要 Windows 特定 API（如窗口句柄传递），需显式声明 Windows 目标
 - 保持与主项目（net8.0-windows10.0.22621.0）一致的 TFM
 
+### 决策 6：PlayerWindow 通过 AssociateWithDispatcherQueue 与主窗口同线程
+
+**选择**: 在 `ShowAsync()` 中调用 `_appWindow.AssociateWithDispatcherQueue(_dispatcherQueue)` 将播放窗口绑定到主窗口的 DispatcherQueue
+
+**理由**:
+- `AssociateWithDispatcherQueue` 确保 AppWindow 和主窗口共享同一 UI 线程的消息循环
+- 窗口销毁时 OS 自动清理 XAML Island 的 DesktopChildSiteBridge 子窗口
+- 焦点自动归还主窗口，标题栏和非客户区输入正常响应
+- `Close()` 只需调用 `_appWindow?.Destroy()`，无需手动 Win32 P/Invoke
+- 与 MpvKernel 的 `MpvPlayerWindow` 实现保持一致
+
+**替代方案**: 不调用 AssociateWithDispatcherQueue，手动用 Win32 API（`EnableWindow`/`SetActiveWindow`/`SetFocus`/`DestroyWindow`）强制清理
+- 缺点：需约 155 行 Win32 P/Invoke 代码，依赖 Windows 内部行为，边界情况多
+
+### 决策 7：mpv 实例采用 Transient 生命周期（每次播放新建，窗口关闭销毁）
+
+**选择**: `IMpvPlayerService` 和 `IPlaybackControlService` 注册为 Transient，每次播放创建全新 MpvClient，窗口关闭时销毁
+
+**理由**:
+- 每次播放都是干净的新 MpvClient，无配置状态残留（音量、速度、字幕轨道等）
+- 与 MpvKernel WinUI 示例完全一致
+- 实现细节：`PlayerPage` 使用 `ActivatorUtilities.CreateInstance` 创建单个 `IMpvPlayerService` 实例，同时传给 `PlayerWindow` 和 `PlaybackControlService`（避免 Transient 模式下各自解析到不同实例）
+- `PlayerWindow.DisposeAsync()` 调用 `_mpv.DisposeAsync()` 销毁 mpv 实例
+
+**替代方案**: 保持 Singleton + Stop()（每次播放只停止不销毁 mpv）
+- 缺点：旧 mpv 实例可能残留 wid、解码配置、字幕轨道等状态，与 MpvKernel 行为不一致
+
+### 决策 8：mpv_command 参数数组需显式 NULL 终止（.NET LibraryImport 约束）
+
+**选择**: 在 `MpvClient.PlayAsync` 中将 `commandArgs` 末尾追加 `null!` 作为终止符
+
+**理由**:
+- `mpv_command` 的 C 签名要求 `const char **args` 是 NULL-terminated 数组
+- .NET `LibraryImport` 源生成器对 `string[]` 的 marshaling 不会自动添加 NULL 终止符
+- 这是 P/Invoke `LibraryImport` + `string[]` 的已知约束，所有使用数组形式调用 `mpv_command` 的代码都需注意
+- 不加 NULL 终止符时，mpv 会读取数组边界后的内存，将垃圾字节当作命令参数解析
+
+### 决策 9：wid（窗口句柄）仅在 MpvClient 初始化时设置一次
+
+**选择**: 在 `InitializeAsync` 中通过 `SetOption("wid", ...)` 设置窗口句柄，`LoadFileAsync` 不再传入 `MpvPlayOptions`
+
+**理由**:
+- `wid` 模式下 mpv 关联窗口后在实例生命周期内不需要重新设置
+- `LoadFileAsync` 简化为只调用 `PlayAsync(filePath)`，语义更清晰
+- 避免每次播放时 `SetOption("wid", ...)` 带来的不必要调用
+
 ## Risks / Trade-offs
 
 **[风险] mpv-kernel NuGet 包兼容性问题**
@@ -102,4 +148,8 @@ mpv-kernel（`Richasy.MpvKernel.*`）是一个分层 .NET 封装库：
 → 需确保 MpvClient.Handle 在播放期间有效；通过 IsDisposed 检查保护
 
 **[风险] 窗口关闭时的资源清理顺序**
-→ PlayerWindow.DisposeAsync → 停止播放 → 关闭 AppWindow → MpvClient 由 DI 管理不被销毁；需确保多次播放/关闭不泄漏
+→ PlayerWindow.DisposeAsync → 销毁 mpv 实例（持有全局信号量）→ 销毁 AppWindow → XamlSource Dispose；需确保多次播放/关闭不泄漏
+
+**[约束] libmpv DLL 进程内单例**
+→ libmpv-2.dll 在进程内只有一份，多个 MpvClient 实例不能并发存在
+→ 通过全局 `SemaphoreSlim` 互斥锁 + 100ms 冷却期确保前一个实例完全销毁后才创建新实例

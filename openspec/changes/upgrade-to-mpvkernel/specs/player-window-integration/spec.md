@@ -6,6 +6,7 @@
 #### Scenario: 创建独立播放窗口
 - **WHEN** PlayerWindow 被实例化
 - **THEN** 系统创建 `AppWindow` 实例
+- **THEN** 系统调用 `AssociateWithDispatcherQueue(_dispatcherQueue)` 将窗口绑定到主线程（确保关闭后主窗口标题栏正常响应）
 - **THEN** 系统创建 `DesktopWindowXamlSource` 并关联到 AppWindow
 - **THEN** 系统获取窗口 HWND 供 mpv wid 模式使用
 
@@ -15,10 +16,11 @@
 - **THEN** 系统调用 `InitializeAsync(hwnd)` 初始化 mpv 客户端
 
 #### Scenario: 窗口关闭触发清理
-- **WHEN** 用户关闭窗口
+- **WHEN** 用户关闭窗口（`Close()` 或点击 X 按钮）
 - **THEN** 系统触发 `Closed` 事件通知外部
-- **THEN** 系统停止播放并释放窗口资源
-- **THEN** 系统不销毁 MpvClient（由 DI 管理 Singleton）
+- **THEN** 系统调用 `_mpv.DisposeAsync()` 销毁 MpvClient 实例
+- **THEN** 系统销毁 AppWindow 和 XamlSource
+- **THEN** 主窗口自动恢复焦点和标题栏响应（因 AssociateWithDispatcherQueue 确保同线程）
 
 #### Scenario: 窗口尺寸变化同步
 - **WHEN** AppWindow 尺寸发生变化
@@ -43,13 +45,15 @@
 
 #### Scenario: 导航到 PlayerPage 时打开播放窗口
 - **WHEN** 应用导航到 PlayerPage 并接收到视频参数
-- **THEN** 系统从 DI 容器获取 PlayerWindow 实例
-- **THEN** 系统调用 `PlayerWindow.Show()` 显示独立窗口
+- **THEN** 系统通过 `ActivatorUtilities.CreateInstance` 创建单个 `IMpvPlayerService` 实例
+- **THEN** 系统将同一实例传给 PlayerWindow 和 PlaybackControlService（共享）
+- **THEN** 系统调用 `PlayerWindow.ShowAsync()` 显示独立窗口
 - **THEN** 系统调用 `PlaybackControlService.PlayVideoAsync()` 开始播放
 - **THEN** PlayerPage 显示为全黑背景
 
 #### Scenario: 播放窗口关闭时导航返回
 - **WHEN** PlayerWindow 触发 Closed 事件
+- **THEN** 系统调用 `PlaybackControlService.StopAsync()` 异步保存进度并清理 HDR 状态
 - **THEN** 系统调用 `_navigation.GoBack()` 返回上一页
 
 ### Requirement: PlayerWindowOverlay UI 覆盖层

@@ -16,6 +16,9 @@ public class MpvPlayerService : IMpvPlayerService
     private readonly ILogger<MpvPlayerService> _logger;
     private readonly System.Threading.Timer _positionTimer;
 
+    /// <summary>全局信号量：确保同一时刻只有一个 MpvClient 在创建或销毁。</summary>
+    private static readonly SemaphoreSlim s_mpvLock = new(1, 1);
+
     private MpvClient? _client;
     private IntPtr _windowHandle;
     private bool _disposed;
@@ -73,12 +76,30 @@ public class MpvPlayerService : IMpvPlayerService
 
         _logger.LogInformation("初始化 MpvClient (wid={Handle})...", windowHandle);
 
-        _client = await MpvClient.CreateAsync(logger: _logger);
+        // 等待全局锁：确保前一个 MpvClient 已完全销毁
+        await s_mpvLock.WaitAsync();
+        try
+        {
+            _client = await MpvClient.CreateAsync(logger: _logger);
+        }
+        finally
+        {
+            s_mpvLock.Release();
+        }
+
         await _client.UseIdleAsync(true);
         await _client.UseKeepOpenAsync(true);
         await _client.SetVideoOutputAsync(VideoOutputType.Gpu);
         await _client.SetGpuContextAsync(GpuContextType.D3D11);
         await _client.SetHardwareDecodeAsync(HardwareDecodeType.Nvdec);
+
+        // 设置 wid（窗口句柄），仅在初始化时设置一次
+        if (_windowHandle != IntPtr.Zero)
+        {
+            var node = new MpvNode(_windowHandle.ToInt64());
+            var err = MpvNative.SetOption(_client.Handle, "wid", MpvFormat.Int64, ref node);
+            _logger.LogInformation("SetOption wid={Wid}, result={Result}", _windowHandle, err);
+        }
 
         // 订阅事件
         _client.DataNotify += OnClientDataNotify;
@@ -121,13 +142,9 @@ public class MpvPlayerService : IMpvPlayerService
 
         try
         {
-            var options = new MpvPlayOptions
-            {
-                WindowHandle = _windowHandle != IntPtr.Zero ? _windowHandle : null,
-            };
-
             _logger.LogInformation("加载文件：{File}", filePath);
-            await _client.PlayAsync(filePath, options);
+            // wid 已在 InitializeAsync 中设置，此处不再重复传入 WindowHandle
+            await _client.PlayAsync(filePath);
             _positionTimer.Change(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         }
         catch (Exception ex)
@@ -235,8 +252,20 @@ public class MpvPlayerService : IMpvPlayerService
             _client.DataNotify -= OnClientDataNotify;
             _client.ReachFileEnd -= OnClientFileEnd;
             _client.ReachFileLoaded -= OnClientFileLoaded;
-            await _client.DisposeAsync();
-            _client = null;
+
+            // 持有全局锁进行销毁，确保新实例不会在销毁期间创建
+            await s_mpvLock.WaitAsync();
+            try
+            {
+                await _client.DisposeAsync();
+                _client = null;
+                // 额外等待 100ms 确保 libmpv 内部后台线程完成清理
+                await Task.Delay(100);
+            }
+            finally
+            {
+                s_mpvLock.Release();
+            }
         }
 
         GC.SuppressFinalize(this);

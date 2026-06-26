@@ -33,7 +33,7 @@ public static partial class MpvNative
     /// </para>
     /// </returns>
     [LibraryImport(MpvLibraryName, EntryPoint = "mpv_command", StringMarshalling = StringMarshalling.Utf8)]
-    public static partial MpvError SetCommand(MpvInteropHandle handle, string[] args);
+    public static partial MpvError SetCommand(MpvInteropHandle handle, string?[] args);
 
     /// <summary>
     /// Same as mpv_command, but uses input.conf parsing for splitting arguments.

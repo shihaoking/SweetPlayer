@@ -50,14 +50,15 @@
 - **THEN** 系统调用 `UseKeepOpenAsync(true)` 保持播放完成后最后一帧显示
 - **THEN** 系统调用 `SetVideoOutputAsync(VideoOutputType.Gpu)` 配置 GPU 输出
 - **THEN** 系统调用 `SetGpuContextAsync(GpuContextType.D3D11)` 配置 D3D11 后端
-- **THEN** 系统调用 `SetHardwareDecodeAsync(HardwareDecodeType.Auto)` 启用硬件解码
+- **THEN** 系统调用 `SetHardwareDecodeAsync(HardwareDecodeType.Nvdec)` 启用硬件解码
+- **THEN** 系统通过 `MpvNative.SetOption("wid", ...)` 设置窗口句柄（仅在初始化时设置一次）
 - **THEN** 系统订阅 `DataNotify` 事件接收状态变化通知
-- **THEN** 系统保存 windowHandle 供后续 PlayAsync 使用
+- **THEN** 系统释放全局信号量
 
 #### Scenario: 播放文件
 - **WHEN** `LoadFileAsync(string filePath)` 被调用
-- **THEN** 系统构建 `MpvPlayOptions`，设置 WindowHandle 为保存的 HWND
-- **THEN** 系统调用 `_client.PlayAsync(filePath, options)` 加载文件
+- **THEN** 系统调用 `_client.PlayAsync(filePath)` 加载文件（不再传入 MpvPlayOptions）
+- **THEN** 注：wid 已在 InitializeAsync 中设置，无需每次播放时重复传入
 
 #### Scenario: 通过 MpvNative 设置播放配置
 - **WHEN** 调用字幕/音轨/画面比例等配置方法
@@ -77,7 +78,18 @@
 #### Scenario: 资源清理
 - **WHEN** MpvPlayerService 被释放（IAsyncDisposable）
 - **THEN** 系统取消事件订阅
+- **THEN** 系统获取全局信号量确保与前一个实例的销毁不并发
 - **THEN** 系统调用 `_client.DisposeAsync()` 释放 MpvClient
+- **THEN** 系统等待 100ms 冷却期确保 libmpv 内部清理完成
+- **THEN** 系统释放全局信号量
+
+### Requirement: mpv_command 参数数组 NULL 终止
+系统 SHALL 确保所有调用 `mpv_command` 的命令数组以 NULL 指针结尾。
+
+#### Scenario: PlayAsync 命令构建
+- **WHEN** `MpvClient.PlayAsync` 构建命令数组
+- **THEN** 系统在参数列表末尾追加 `null` 作为 NULL 终止符
+- **THEN** 原因：.NET `LibraryImport` 对 `string[]` 的 marshaling 不会自动添加 NULL 终止符，缺少先会导致二次播放时 mpv 解析参数越界读到垃圾数据
 
 ### Requirement: PlaybackControlService 适配
 系统 SHALL 适配 PlaybackControlService 以匹配新的 IMpvPlayerService 接口。
@@ -99,8 +111,14 @@
 
 #### Scenario: DI 容器注册
 - **WHEN** 配置 DI 容器
-- **THEN** 保留 `services.AddSingleton<IMpvPlayerService, MpvPlayerService>()` 注册
-- **THEN** 新增 `services.AddTransient<PlayerWindow>()` 注册独立播放窗口
+- **THEN** 注册 `services.AddTransient<IMpvPlayerService, MpvPlayerService>()`（每次播放创建新实例，与 MpvKernel 行为一致）
+- **THEN** 注册 `services.AddTransient<IPlaybackControlService, PlaybackControlService>()`（每次播放创建新实例）
+- **THEN** 注册 `services.AddTransient<PlayerWindow>()` 注册独立播放窗口
+
+#### Scenario: PlayerPage 创建播放实例
+- **WHEN** 导航到 PlayerPage
+- **THEN** 通过 `ActivatorUtilities.CreateInstance` 创建单个 `IMpvPlayerService` 实例
+- **THEN** 将同一实例传给 PlayerWindow 和 PlaybackControlService（避免 Transient 模式下各自拿到不同实例）
 
 #### Scenario: mpv DLL 路径初始化
 - **WHEN** 应用启动

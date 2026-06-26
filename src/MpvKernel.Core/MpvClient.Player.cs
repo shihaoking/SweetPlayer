@@ -24,9 +24,9 @@ public sealed partial class MpvClient
         _cachedDuration = default;
         _cachedSnapshot = new(filePath, options);
         var errorCode = MpvError.Success;
-        // 使用数组形式的命令参数，不需要引号包裹，filePath 作为独立参数传递
-        // 避免 URL 中的特殊字符（如引号）导致解析问题
-        List<string> commandArgs = ["loadfile", filePath, "replace"];
+        // mpv loadfile 命令参数顺序: loadfile <url> <flags> <index> <options>
+        // index 为 -1 表示追加到播放列表末尾
+        List<string?> commandArgs = ["loadfile", filePath, "replace", "-1"];
         List<string> commandOptions = [];
 
         if (options != null)
@@ -86,9 +86,12 @@ public sealed partial class MpvClient
 
         if (commandOptions.Count > 0)
         {
-            var optionStr = string.Join(',', commandOptions);
+            var optionStr = string.Join(':', commandOptions);
             commandArgs.Add(optionStr);
         }
+
+        // mpv_command 要求参数数组以 NULL 指针结尾
+        commandArgs.Add(null);
 
         // 使用数组形式的命令 (mpv_command) 而非字符串命令 (mpv_command_string)
         // 数组形式不需要转义特殊字符，可正确处理 URL 中的引号等字符

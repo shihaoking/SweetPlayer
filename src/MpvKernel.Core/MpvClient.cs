@@ -246,7 +246,7 @@ public sealed partial class MpvClient : IAsyncDisposable
     {
         if (errorCode != MpvError.Success)
         {
-            throw new MpvException(message, errorCode);
+            throw new MpvException($"{message} (error: {errorCode})", errorCode);
         }
     }
 
