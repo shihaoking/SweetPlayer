@@ -47,7 +47,7 @@ public sealed partial class PlayerPage : Page
             await _playerWindow.ShowAsync();
 
             // 设置 UI 覆盖层
-            var overlay = new PlayerWindowOverlay(_playerWindow, _viewModel);
+            var overlay = new PlayerWindowOverlay(_playerWindow, _viewModel, _playback);
             _playerWindow.SetOverlayContent(overlay);
 
             // 监听窗口关闭

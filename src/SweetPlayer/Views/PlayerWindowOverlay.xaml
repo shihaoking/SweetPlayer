@@ -174,10 +174,6 @@
                             LargeChange="10"
                             VerticalAlignment="Center"
                             ValueChanged="OnProgressSliderValueChanged"
-                            PointerPressed="OnSliderPointerPressed"
-                            PointerReleased="OnSliderPointerReleased"
-                            PointerCanceled="OnSliderPointerReleased"
-                            PointerCaptureLost="OnSliderPointerReleased"
                             Tapped="OnSliderTapped" />
 
                     <TextBlock Grid.Column="2"

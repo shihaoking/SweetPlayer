@@ -142,6 +142,9 @@ public sealed partial class PlayerViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isUserSeeking;
 
+    /// <summary>Overlay 指针事件设置的拖拽进行中标志，OnPositionChanged 据此抑制回写。</summary>
+    public bool IsDraggingSlider { get; set; }
+
     partial void OnIsUserSeekingChanged(bool value)
     {
         System.Diagnostics.Debug.WriteLine($"[PlayerVM] IsUserSeeking changed to: {value}");
@@ -472,6 +475,13 @@ public sealed partial class PlayerViewModel : ViewModelBase
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
+            // 用户正在拖拽进度条，完全抑制 mpv 位置回写
+            if (IsDraggingSlider)
+            {
+                System.Diagnostics.Debug.WriteLine($"[PlayerVM] OnPositionChanged: suppressed (IsDraggingSlider=true), mpv={position.TotalSeconds:F1}s");
+                return;
+            }
+
             // 提交 seek 后，只有在 mpv 报告接近目标位置时才解除抽制，避免被旧位置覆盖
             if (_suppressSeekFeedback)
             {
@@ -479,23 +489,11 @@ public sealed partial class PlayerViewModel : ViewModelBase
                 {
                     _suppressSeekFeedback = false;
                     PositionSeconds = position.TotalSeconds;
-                    // 确保 IsUserSeeking 在 seek 完成后被重置
-                    if (IsUserSeeking)
-                    {
-                        IsUserSeeking = false;
-                        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Reset IsUserSeeking to false after seek completed");
-                    }
                 }
                 // 否则丢弃本次回写（mpv seek 未完成）
             }
             else
             {
-                // 正常播放时，如果 IsUserSeeking 仍然为 true，也重置它
-                if (IsUserSeeking)
-                {
-                    IsUserSeeking = false;
-                    System.Diagnostics.Debug.WriteLine($"[PlayerVM] Reset IsUserSeeking to false during normal playback");
-                }
                 PositionSeconds = position.TotalSeconds;
             }
 
