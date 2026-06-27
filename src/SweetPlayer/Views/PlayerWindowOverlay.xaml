@@ -63,6 +63,15 @@
           PointerEntered="OnPointerMoved"
           KeyDown="OnRootKeyDown">
 
+        <!-- 自定义标题栏行（随控件显隐同步）：仅左侧应用图标，无标题文字 -->
+        <Grid x:Name="PlayerTitleBar"
+              Height="48"
+              VerticalAlignment="Top"
+              Background="Transparent"
+              IsHitTestVisible="False"
+              Opacity="1">
+        </Grid>
+
         <!-- 顶部信息栏 -->
         <Grid x:Name="TopBar"
               Opacity="1"
@@ -108,12 +117,6 @@
                            MaxWidth="640" />
             </StackPanel>
 
-            <Button Grid.Column="2"
-                    Style="{StaticResource OverlayIconButtonStyle}"
-                    Click="OnGearClick"
-                    ToolTipService.ToolTip="播放设置">
-                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE713;" FontSize="16" />
-            </Button>
         </Grid>
 
         <!-- 中央播放/暂停 -->
@@ -184,15 +187,12 @@
                                Padding="12,0,0,0" />
                 </Grid>
 
-                <!-- 控制按钮行 -->
+                <!-- 控制按钮行：中心播放控制居中，功能按钮靠右 -->
                 <Grid Margin="0,4,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                    <!-- 后退/播放/快进：居中层 -->
+                    <StackPanel Orientation="Horizontal" Spacing="6"
+                                HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Button Style="{StaticResource OverlayIconButtonStyle}"
                                 Click="OnSeekBackwardClick"
                                 ToolTipService.ToolTip="后退 10 秒 (←)">
@@ -218,29 +218,30 @@
                         </Button>
                     </StackPanel>
 
-                    <Button Grid.Column="1"
-                            HorizontalAlignment="Center"
-                            Style="{StaticResource OverlayIconButtonStyle}"
-                            ToolTipService.ToolTip="播放速度 ([ / ])">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xEC57;" FontSize="14" />
-                            <TextBlock Text="{x:Bind ViewModel.SpeedLabel, Mode=OneWay}"
-                                       FontWeight="SemiBold"
-                                       Foreground="#FFE9C46A" />
-                        </StackPanel>
-                        <Button.Flyout>
-                            <MenuFlyout Placement="Top">
-                                <MenuFlyoutItem Text="0.5x"  Click="OnSpeedItemClick" Tag="0.5" />
-                                <MenuFlyoutItem Text="0.75x" Click="OnSpeedItemClick" Tag="0.75" />
-                                <MenuFlyoutItem Text="1.0x"  Click="OnSpeedItemClick" Tag="1.0" />
-                                <MenuFlyoutItem Text="1.25x" Click="OnSpeedItemClick" Tag="1.25" />
-                                <MenuFlyoutItem Text="1.5x"  Click="OnSpeedItemClick" Tag="1.5" />
-                                <MenuFlyoutItem Text="2.0x"  Click="OnSpeedItemClick" Tag="2.0" />
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
+                    <!-- 倒速+功能按钮：靠右层 -->
+                    <StackPanel Orientation="Horizontal" Spacing="6"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- 倍速 -->
+                        <Button Style="{StaticResource OverlayIconButtonStyle}"
+                                ToolTipService.ToolTip="播放速度 ([ / ])">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xEC57;" FontSize="14" />
+                                <TextBlock Text="{x:Bind ViewModel.SpeedLabel, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FFE9C46A" />
+                            </StackPanel>
+                            <Button.Flyout>
+                                <MenuFlyout Placement="Top">
+                                    <MenuFlyoutItem Text="0.5x"  Click="OnSpeedItemClick" Tag="0.5" />
+                                    <MenuFlyoutItem Text="0.75x" Click="OnSpeedItemClick" Tag="0.75" />
+                                    <MenuFlyoutItem Text="1.0x"  Click="OnSpeedItemClick" Tag="1.0" />
+                                    <MenuFlyoutItem Text="1.25x" Click="OnSpeedItemClick" Tag="1.25" />
+                                    <MenuFlyoutItem Text="1.5x"  Click="OnSpeedItemClick" Tag="1.5" />
+                                    <MenuFlyoutItem Text="2.0x"  Click="OnSpeedItemClick" Tag="2.0" />
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
                         <Button Style="{StaticResource OverlayIconButtonStyle}"
                                 Click="OnSubtitleClick"
                                 ToolTipService.ToolTip="字幕 (S)">
@@ -361,18 +362,17 @@
                 BorderThickness="1,0,0,0"
                 Visibility="{x:Bind ViewModel.IsSettingsPaneOpen, Mode=OneWay}">
             <Grid>
-                <Grid.RowDefinitions>
+                <Grid.RowDefinitions >
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Padding="22,22,18,8">
+                <Grid Grid.Row="0" Padding="18,48,18,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="PLAYER"
+                        <TextBlock Text="SETTING"
                                    Foreground="#FFE9C46A"
                                    FontSize="10"
                                    FontWeight="Bold"
@@ -383,11 +383,6 @@
                                    FontWeight="Bold"
                                    Margin="0,2,0,0" />
                     </StackPanel>
-                    <Button Grid.Column="1"
-                            Style="{StaticResource OverlayIconButtonStyle}"
-                            Click="OnCloseSettingsClick">
-                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE711;" FontSize="14" />
-                    </Button>
                 </Grid>
 
                 <Pivot Grid.Row="1"

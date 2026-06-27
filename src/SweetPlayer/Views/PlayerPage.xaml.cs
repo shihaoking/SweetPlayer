@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Navigation;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services;
 using SweetPlayer.Services.Playback;
+using SweetPlayer.Services.Settings;
 using SweetPlayer.ViewModels;
 
 namespace SweetPlayer.Views;
@@ -45,6 +46,13 @@ public sealed partial class PlayerPage : Page
 
             // 显示独立播放窗口
             await _playerWindow.ShowAsync();
+
+            // 根据用户设置决定起始窗口模式
+            var userSettings = App.Services.GetRequiredService<IUserSettingsService>();
+            if (userSettings.DefaultPlaybackWindowMode == PlaybackWindowMode.FullScreen)
+            {
+                _playerWindow.ToggleFullScreen();
+            }
 
             // 设置 UI 覆盖层
             var overlay = new PlayerWindowOverlay(_playerWindow, _viewModel, _playback);

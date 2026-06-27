@@ -5,6 +5,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Hosting;
 using SweetPlayer.Services.Playback;
+using Windows.Graphics;
 using WinRT.Interop;
 
 namespace SweetPlayer.Views;
@@ -53,13 +54,29 @@ public sealed class PlayerWindow : IAsyncDisposable
         _appWindow.AssociateWithDispatcherQueue(_dispatcherQueue);
         _appWindow.Title = "SweetPlayer";
 
-        // 隐藏 Windows 标题栏，让视频铺满整个窗口区域（覆盖层 TopBar 提供悬浮标题）
+        // 恢复标题栏，并将 XAML 内容拓展到标题栏区域
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+            presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true);
         }
+        _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+        _appWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
 
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));
+        // 标题栏按钮颜色：透明背景 + 白色图标，融入深色视频背景
+        _appWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+        _appWindow.TitleBar.ButtonForegroundColor = Microsoft.UI.Colors.White;
+        _appWindow.TitleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
+        _appWindow.TitleBar.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
+        _appWindow.TitleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(80, 255, 255, 255);
+        _appWindow.TitleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.White;
+        _appWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        _appWindow.TitleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(150, 255, 255, 255);
+
+        // 初始尺寸：视频内容区域 1920×1130，加上标题栏高度（动态获取）
+        var titleBarHeight = (int)_appWindow.TitleBar.Height;
+        if (titleBarHeight <= 0) titleBarHeight = 48; // 备用默认值
+        _appWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1130 + titleBarHeight));
+        Log($"ShowAsync: 标题栏高度={titleBarHeight}, 窗口大小=1920x{1130 + titleBarHeight}");
         _appWindow.Destroying += OnWindowDestroying;
         _appWindow.Changed += OnWindowChanged;
         Log($"AppWindow 已创建并关联 DispatcherQueue, Id={_appWindow.Id.Value}");
@@ -148,6 +165,23 @@ public sealed class PlayerWindow : IAsyncDisposable
     public bool IsFullScreen => _isFullScreen;
 
     /// <summary>
+    /// 更新标题栏可拖拽区域（排除系统按钮区域）。
+    /// </summary>
+    public void UpdateTitleBarDragRects()
+    {
+        if (_appWindow is null) return;
+        var tb = _appWindow.TitleBar;
+        if (!tb.ExtendsContentIntoTitleBar) return;
+        var height = (int)tb.Height;
+        if (height <= 0) return;
+        var rightInset = (int)tb.RightInset;
+        var leftInset = (int)tb.LeftInset;
+        var width = _appWindow.Size.Width;
+        tb.SetDragRectangles([new RectInt32(leftInset, 0, width - rightInset - leftInset, height)]);
+        Log($"UpdateTitleBarDragRects: leftInset={leftInset}, rightInset={rightInset}, height={height}, width={width}");
+    }
+
+    /// <summary>
     /// 关闭窗口。
     /// </summary>
     public void Close()
@@ -219,6 +253,7 @@ public sealed class PlayerWindow : IAsyncDisposable
         {
             Log($"OnWindowChanged: DidSize={args.DidSizeChange}, DidVisibility={args.DidVisibilityChange}, DidPresenter={args.DidPresenterChange}");
             UpdateXamlSourcePosition();
+            UpdateTitleBarDragRects();
         }
     }
 

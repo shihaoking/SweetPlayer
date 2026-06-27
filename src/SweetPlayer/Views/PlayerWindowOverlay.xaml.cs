@@ -80,6 +80,9 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
         UpdatePlayIcons();
         UpdateVolumeIcon();
+
+        // 更新标题栏拖拽区域
+        _playerWindow.UpdateTitleBarDragRects();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -127,6 +130,7 @@ public sealed partial class PlayerWindowOverlay : UserControl
         AnimateOpacity(TopBar, 1.0, 200);
         AnimateOpacity(BottomBar, 1.0, 200);
         AnimateOpacity(CenterPlayButton, 1.0, 200);
+        AnimateOpacity(PlayerTitleBar, 1.0, 200);
     }
 
     private void HideControls()
@@ -136,6 +140,7 @@ public sealed partial class PlayerWindowOverlay : UserControl
         AnimateOpacity(TopBar, 0.0, 300);
         AnimateOpacity(BottomBar, 0.0, 300);
         AnimateOpacity(CenterPlayButton, 0.0, 300);
+        AnimateOpacity(PlayerTitleBar, 0.0, 300);
     }
 
     private static void AnimateOpacity(UIElement target, double to, int durationMs)

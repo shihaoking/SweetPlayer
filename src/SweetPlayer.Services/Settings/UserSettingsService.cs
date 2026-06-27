@@ -37,6 +37,19 @@ public class UserSettingsService : IUserSettingsService
         }
     }
 
+    public PlaybackWindowMode DefaultPlaybackWindowMode
+    {
+        get => _data.DefaultPlaybackWindowMode;
+        set
+        {
+            if (_data.DefaultPlaybackWindowMode != value)
+            {
+                _data.DefaultPlaybackWindowMode = value;
+                _ = SaveAsync();
+            }
+        }
+    }
+
     public async Task SaveAsync()
     {
         try
@@ -83,5 +96,6 @@ public class UserSettingsService : IUserSettingsService
     private class UserSettingsData
     {
         public bool AutoResumePlayback { get; set; } = true;
+        public PlaybackWindowMode DefaultPlaybackWindowMode { get; set; } = PlaybackWindowMode.Windowed;
     }
 }
