@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MpvKernel.Core", "src\MpvKe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MpvKernel.Interop", "src\MpvKernel.Interop\MpvKernel.Interop.csproj", "{F75B3067-04C8-EEFF-427F-5350867769A0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HdrDetectionTool", "tests\HdrDetectionTool\HdrDetectionTool.csproj", "{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -131,12 +133,29 @@ Global
 		{F75B3067-04C8-EEFF-427F-5350867769A0}.Release|x64.Build.0 = Release|Any CPU
 		{F75B3067-04C8-EEFF-427F-5350867769A0}.Release|x86.ActiveCfg = Release|Any CPU
 		{F75B3067-04C8-EEFF-427F-5350867769A0}.Release|x86.Build.0 = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|ARM64.ActiveCfg = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|ARM64.Build.0 = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|x64.Build.0 = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Debug|x86.Build.0 = Debug|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|ARM64.ActiveCfg = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|ARM64.Build.0 = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|x64.ActiveCfg = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|x64.Build.0 = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|x86.ActiveCfg = Release|Any CPU
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AA1252B6-5C73-48EC-AACA-BF9248588FAF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{7908A3C8-6D18-4C23-98A0-F6616EEB1EE7} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D1F34266-7BAE-47AB-9D2B-954F03EC6464}

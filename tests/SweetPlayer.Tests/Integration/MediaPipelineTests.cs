@@ -35,7 +35,8 @@ public class MediaPipelineTests
 
             var sourceService = new MediaSourceService(dbFactory, httpFactory, protector);
             var mockScrapingQueue = new MockScrapingQueueService();
-            var scanner = new MediaScannerService(dbFactory, httpFactory, protector, mockScrapingQueue, NullLogger<MediaScannerService>.Instance);
+            var scanner = new MediaScannerService(dbFactory, httpFactory, protector, mockScrapingQueue,
+                new VideoAnalysisService(), new HdrDetectionService(), NullLogger<MediaScannerService>.Instance);
 
             // 行为：添加本地源 → 扫描
             var source = await sourceService.AddLocalSourceAsync(tempDir, "测试源");

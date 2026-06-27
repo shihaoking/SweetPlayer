@@ -77,7 +77,6 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
     private readonly IUserSettingsService _userSettings;
     private readonly System.Threading.Timer _saveProgressTimer;
     private VideoFile? _currentVideo;
-    private bool _hdrAutoEnabled;
     private bool _disposed;
 
     public PlaybackControlService(
@@ -128,7 +127,6 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
             if (needsHdr && _hdr.IsHdrSupported() && !_hdr.IsHdrEnabled())
             {
                 await _hdr.EnableHdrAsync();
-                _hdrAutoEnabled = true;
                 _logger.LogInformation("已为 HDR 视频自动启用系统 HDR：{File}", videoFile.FileName);
             }
         }
@@ -200,6 +198,20 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
     {
         _saveProgressTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
+        // 立即恢复系统 HDR（最高优先级，在任何其他清理之前执行）
+        try
+        {
+            if (_hdr.IsHdrSupported() && _hdr.IsHdrEnabled())
+            {
+                await _hdr.DisableHdrAsync();
+                _logger.LogInformation("已关闭系统 HDR");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "关闭系统 HDR 失败");
+        }
+
         try
         {
             await SaveCurrentProgressAsync();
@@ -210,26 +222,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         }
 
         _mpv.Stop();
-        
         _currentVideo = null;
-
-        // 恢复 HDR 状态
-        if (_hdrAutoEnabled)
-        {
-            try
-            {
-                await _hdr.DisableHdrAsync();
-                _logger.LogInformation("已恢复系统 HDR 原始状态");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "恢复系统 HDR 状态失败");
-            }
-            finally
-            {
-                _hdrAutoEnabled = false;
-            }
-        }
     }
 
     public void Dispose()

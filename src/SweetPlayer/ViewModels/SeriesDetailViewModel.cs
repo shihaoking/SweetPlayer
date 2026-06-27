@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using SweetPlayer.Core.Data;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services;
-using SweetPlayer.Services.Playback;
 using SweetPlayer.Views;
 
 namespace SweetPlayer.ViewModels;
@@ -55,7 +54,6 @@ public sealed partial class SeriesDetailViewModel : ViewModelBase
 {
     private readonly IDbContextFactory<SweetPlayerDbContext> _dbFactory;
     private readonly INavigationService _navigation;
-    private readonly IPlaybackControlService _playback;
 
     private readonly Dictionary<int, List<EpisodeItem>> _episodesBySeason = new();
 
@@ -85,12 +83,10 @@ public sealed partial class SeriesDetailViewModel : ViewModelBase
 
     public SeriesDetailViewModel(
         IDbContextFactory<SweetPlayerDbContext> dbFactory,
-        INavigationService navigation,
-        IPlaybackControlService playback)
+        INavigationService navigation)
     {
         _dbFactory = dbFactory;
         _navigation = navigation;
-        _playback = playback;
         Seasons = new ObservableCollection<SeasonItem>();
         Episodes = new ObservableCollection<EpisodeItem>();
     }
@@ -176,14 +172,12 @@ public sealed partial class SeriesDetailViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task PlayEpisodeAsync(EpisodeItem? episode)
+    private void PlayEpisode(EpisodeItem? episode)
     {
         if (episode?.File is null) return;
 
-        // 先导航到播放页面（创建渲染器），再加载视频
-        // 否则 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
+        // 仅导航到播放页面，PlayerPage.OnNavigatedTo 负责创建 mpv 实例并开始播放
         _navigation.NavigateTo(typeof(PlayerPage), episode.File);
-        await _playback.PlayVideoAsync(episode.File);
     }
 
     [RelayCommand]

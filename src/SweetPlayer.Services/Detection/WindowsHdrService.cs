@@ -12,8 +12,6 @@ namespace SweetPlayer.Services.Detection;
 /// </remarks>
 public class WindowsHdrService : IWindowsHdrService
 {
-    private bool? _previousHdrEnabled;
-
     /// <inheritdoc />
     public bool IsHdrSupported()
     {
@@ -39,13 +37,7 @@ public class WindowsHdrService : IWindowsHdrService
     {
         return Task.Run(() =>
         {
-            _previousHdrEnabled = IsHdrEnabled();
-            if (_previousHdrEnabled == true)
-            {
-                return;
-            }
-
-            if (IsHdrSupported())
+            if (IsHdrSupported() && !IsHdrEnabled())
             {
                 TrySetAdvancedColorState(true);
             }
@@ -57,22 +49,10 @@ public class WindowsHdrService : IWindowsHdrService
     {
         return Task.Run(() =>
         {
-            // 没有记录原始状态时，按禁用处理（不改动）
-            if (_previousHdrEnabled is null)
+            if (IsHdrEnabled())
             {
-                return;
+                TrySetAdvancedColorState(false);
             }
-
-            var previous = _previousHdrEnabled.Value;
-            _previousHdrEnabled = null;
-
-            var current = IsHdrEnabled();
-            if (current == previous)
-            {
-                return;
-            }
-
-            TrySetAdvancedColorState(previous);
         });
     }
 
