@@ -231,10 +231,6 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
     private void OnProgressSliderValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
-        var diff = Math.Abs(e.NewValue - e.OldValue);
-        var src = e.OriginalSource?.GetType().Name ?? "null";
-        System.Diagnostics.Debug.WriteLine($"[Slider] ValueChanged: old={e.OldValue:F1} new={e.NewValue:F1} diff={diff:F1} isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking} src={src} sliderVal={ProgressSlider.Value:F1}");
-
         // 仅在指针事件（PointerPressed）已标记拖拽时，才同步 slider 值到 ViewModel
         // 不使用 diff 自动检测，避免首次位置跳变被误判为拖拽
         if (_isDragging || ViewModel.IsUserSeeking)
@@ -253,35 +249,24 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
     private void OnProgressGridPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var srcType = e.OriginalSource?.GetType().Name ?? "null";
         var isSliderHit = e.OriginalSource is Microsoft.UI.Xaml.Controls.Slider ||
             (e.OriginalSource is FrameworkElement fe && FindParent<Slider>(fe) is not null);
-        System.Diagnostics.Debug.WriteLine($"[Grid] PointerPressed: originalSrc={srcType} isSliderHit={isSliderHit} isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking}");
 
         if (isSliderHit)
         {
             ViewModel.IsUserSeeking = true;
             ViewModel.IsDraggingSlider = true;
             _isDragging = true;
-            System.Diagnostics.Debug.WriteLine($"[Grid] PointerPressed → set isDragging=true, isUserSeeking=true");
         }
     }
 
     private void OnProgressGridPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        var srcType = e.OriginalSource?.GetType().Name ?? "null";
-        System.Diagnostics.Debug.WriteLine($"[Grid] PointerReleased: originalSrc={srcType} isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking} posSeconds={ViewModel.PositionSeconds:F1}");
-
         if (ViewModel.IsUserSeeking || _isDragging)
         {
-            System.Diagnostics.Debug.WriteLine($"[Grid] PointerReleased → calling CommitSliderSeek()");
             CommitSliderSeek();
             _isDragging = false;
             ViewModel.IsDraggingSlider = false;
-        }
-        else
-        {
-            System.Diagnostics.Debug.WriteLine($"[Grid] PointerReleased → SKIPPED (no flags set)");
         }
     }
 
@@ -298,8 +283,7 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
     private void OnSliderPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var srcType = e.OriginalSource?.GetType().Name ?? "null";
-        System.Diagnostics.Debug.WriteLine($"[Slider] PointerPressed: originalSrc={srcType} handled={e.Handled} isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking}");
+        System.Diagnostics.Debug.WriteLine($"[Slider] PointerPressed: isDragging={_isDragging} → true");
         ViewModel.IsUserSeeking = true;
         ViewModel.IsDraggingSlider = true;
         _isDragging = true;
@@ -307,27 +291,20 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
     private void OnSliderPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        var srcType = e.OriginalSource?.GetType().Name ?? "null";
-        System.Diagnostics.Debug.WriteLine($"[Slider] PointerReleased: originalSrc={srcType} handled={e.Handled} isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking} posSeconds={ViewModel.PositionSeconds:F1} sliderVal={ProgressSlider.Value:F1}");
-
         if (ViewModel.IsUserSeeking || _isDragging)
         {
-            System.Diagnostics.Debug.WriteLine($"[Slider] PointerReleased → calling CommitSliderSeek()");
+            System.Diagnostics.Debug.WriteLine($"[Slider] PointerReleased: committing seek to {ProgressSlider.Value:F1}s");
             CommitSliderSeek();
             _isDragging = false;
             ViewModel.IsDraggingSlider = false;
-        }
-        else
-        {
-            System.Diagnostics.Debug.WriteLine($"[Slider] PointerReleased → SKIPPED (no flags set)");
         }
     }
 
     private void OnSliderPointerCanceled(object sender, PointerRoutedEventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine($"[Slider] PointerCanceled: isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking}");
         if (ViewModel.IsUserSeeking || _isDragging)
         {
+            System.Diagnostics.Debug.WriteLine($"[Slider] PointerCanceled: committing seek to {ProgressSlider.Value:F1}s");
             CommitSliderSeek();
             _isDragging = false;
             ViewModel.IsDraggingSlider = false;
@@ -336,10 +313,9 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
     private void OnSliderPointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine($"[Slider] PointerCaptureLost: isDragging={_isDragging} isUserSeeking={ViewModel.IsUserSeeking} posSeconds={ViewModel.PositionSeconds:F1} sliderVal={ProgressSlider.Value:F1}");
         if (ViewModel.IsUserSeeking || _isDragging)
         {
-            System.Diagnostics.Debug.WriteLine($"[Slider] PointerCaptureLost → calling CommitSliderSeek()");
+            System.Diagnostics.Debug.WriteLine($"[Slider] PointerCaptureLost: committing seek to {ProgressSlider.Value:F1}s");
             CommitSliderSeek();
             _isDragging = false;
             ViewModel.IsDraggingSlider = false;
@@ -348,7 +324,7 @@ public sealed partial class PlayerWindowOverlay : UserControl
 
     private void OnSliderTapped(object sender, TappedRoutedEventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine($"[Slider] Tapped: sliderVal={ProgressSlider.Value:F1} posSeconds={ViewModel.PositionSeconds:F1} isDragging={_isDragging}");
+        System.Diagnostics.Debug.WriteLine($"[Slider] Tapped: seeking to {ProgressSlider.Value:F1}s");
         CommitSliderSeek();
         _isDragging = false;
         ViewModel.IsDraggingSlider = false;

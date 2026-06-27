@@ -204,7 +204,6 @@ public class MpvPlayerService : IMpvPlayerService
     {
         if (_client is null) return;
         _position = position < TimeSpan.Zero ? TimeSpan.Zero : position;
-        System.Diagnostics.Debug.WriteLine($"[MpvPlayerService] Seek called: position={_position.TotalSeconds}s");
         _ = _client.SetCurrentPositionAsync(_position.TotalSeconds);
         PositionChanged?.Invoke(this, _position);
     }

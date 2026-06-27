@@ -52,6 +52,13 @@ public sealed class PlayerWindow : IAsyncDisposable
         _appWindow = AppWindow.Create();
         _appWindow.AssociateWithDispatcherQueue(_dispatcherQueue);
         _appWindow.Title = "SweetPlayer";
+
+        // 隐藏 Windows 标题栏，让视频铺满整个窗口区域（覆盖层 TopBar 提供悬浮标题）
+        if (_appWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: false);
+        }
+
         _appWindow.Resize(new Windows.Graphics.SizeInt32(1920, 1080));
         _appWindow.Destroying += OnWindowDestroying;
         _appWindow.Changed += OnWindowChanged;

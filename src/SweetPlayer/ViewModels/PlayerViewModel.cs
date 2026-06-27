@@ -147,7 +147,6 @@ public sealed partial class PlayerViewModel : ViewModelBase
 
     partial void OnIsUserSeekingChanged(bool value)
     {
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] IsUserSeeking changed to: {value}");
     }
 
     public string CurrentTimeText => FormatTime(TimeSpan.FromSeconds(PositionSeconds));
@@ -456,16 +455,11 @@ public sealed partial class PlayerViewModel : ViewModelBase
     public void CommitSeekFromSlider()
     {
         var targetSec = PositionSeconds;
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] CommitSeekFromSlider: target={targetSec}s, duration={DurationSeconds}s");
         IsUserSeeking = false;
         var target = TimeSpan.FromSeconds(targetSec);
         _suppressSeekFeedback = true;
         _seekTargetSeconds = targetSec;
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Calling _playback.MpvPlayer.Seek({target})");
         _playback.MpvPlayer.Seek(target);
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Seek call completed");
-        
-        // 确保 IsUserSeeking 在 seek 完成后保持为 false，让后续的位置更新能够同步到 UI
         IsUserSeeking = false;
     }
 
@@ -478,7 +472,6 @@ public sealed partial class PlayerViewModel : ViewModelBase
             // 用户正在拖拽进度条，完全抑制 mpv 位置回写
             if (IsDraggingSlider)
             {
-                System.Diagnostics.Debug.WriteLine($"[PlayerVM] OnPositionChanged: suppressed (IsDraggingSlider=true), mpv={position.TotalSeconds:F1}s");
                 return;
             }
 
