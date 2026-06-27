@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using SweetPlayer.Core.Data;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services;
-using SweetPlayer.Services.Playback;
 using SweetPlayer.Views;
 
 namespace SweetPlayer.ViewModels;
@@ -18,7 +17,6 @@ public sealed partial class MovieDetailViewModel : ViewModelBase
 {
     private readonly IDbContextFactory<SweetPlayerDbContext> _dbFactory;
     private readonly INavigationService _navigation;
-    private readonly IPlaybackControlService _playback;
 
     [ObservableProperty]
     private string _title = string.Empty;
@@ -55,12 +53,10 @@ public sealed partial class MovieDetailViewModel : ViewModelBase
 
     public MovieDetailViewModel(
         IDbContextFactory<SweetPlayerDbContext> dbFactory,
-        INavigationService navigation,
-        IPlaybackControlService playback)
+        INavigationService navigation)
     {
         _dbFactory = dbFactory;
         _navigation = navigation;
-        _playback = playback;
         Versions = new ObservableCollection<VideoFile>();
     }
 
@@ -108,15 +104,13 @@ public sealed partial class MovieDetailViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task PlayAsync()
+    private void Play()
     {
         var target = SelectedVersion ?? Versions.FirstOrDefault();
         if (target is null) return;
 
-        // 先导航到播放页面（创建渲染器），再加载视频
-        // 否则 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
+        // 仅导航到播放页面，PlayerPage.OnNavigatedTo 负责创建 mpv 实例并开始播放
         _navigation.NavigateTo(typeof(PlayerPage), target);
-        await _playback.PlayVideoAsync(target);
     }
 
     [RelayCommand]

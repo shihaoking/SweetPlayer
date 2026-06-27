@@ -3,7 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Richasy.MpvKernel;
 using SweetPlayer.Core.Data;
 using SweetPlayer.Services;
 using SweetPlayer.Services.BackgroundTasks;
@@ -111,10 +114,11 @@ public partial class App : Application
         services.AddSingleton<IHdrDetectionService, HdrDetectionService>();
         services.AddSingleton<IWindowsHdrService, WindowsHdrService>();
 
-        // 视频播放引擎
-        services.AddSingleton<IMpvPlayerService, MpvPlayerService>();
+        // 视频播放引擎（Transient：每次播放创建新实例，窗口关闭即销毁）
+        services.AddTransient<IMpvPlayerService, MpvPlayerService>();
+        services.AddTransient<PlayerWindow>();
         services.AddSingleton<IPlaybackProgressService, PlaybackProgressService>();
-        services.AddSingleton<IPlaybackControlService, PlaybackControlService>();
+        services.AddTransient<IPlaybackControlService, PlaybackControlService>();
         services.AddSingleton<IKeyboardShortcutService, KeyboardShortcutService>();
 
         // 字幕管理
@@ -167,9 +171,46 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // 初始化 mpv DLL 加载路径
+        MpvNative.Initialize(System.IO.Path.Combine(AppContext.BaseDirectory, "libmpv-2.dll"));
+
         _window = new MainWindow();
         Views.MainWindowAccessor.Current = _window;
         _window.Activate();
+
+        // 设置应用图标（任务栏 + 标题栏）
+        var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "SweetPlayer.ico");
+        if (System.IO.File.Exists(iconPath))
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(_window);
+            var winId = Win32Interop.GetWindowIdFromWindow(hwnd);
+            var appWindow = AppWindow.GetFromWindowId(winId);
+            appWindow.SetIcon(iconPath);
+        }
+
+        // 主窗口尺寸约束：宽度固定 1750，禁止调整大小
+        if (_window is MainWindow mainWin)
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(mainWin);
+            var winId = Win32Interop.GetWindowIdFromWindow(hwnd);
+            var appWindow = AppWindow.GetFromWindowId(winId);
+            appWindow.Resize(new Windows.Graphics.SizeInt32(2380, appWindow.Size.Height));
+            if (appWindow.Presenter is OverlappedPresenter mainPresenter)
+            {
+                mainPresenter.IsResizable = false;
+                mainPresenter.IsMaximizable = false;
+            }
+
+            // 标题栏按钮颜色：透明背景 + 白色图标，与视频播放窗口保持一致
+            appWindow.TitleBar.ButtonBackgroundColor = Microsoft.UI.Colors.Transparent;
+            appWindow.TitleBar.ButtonForegroundColor = Microsoft.UI.Colors.White;
+            appWindow.TitleBar.ButtonHoverBackgroundColor = Windows.UI.Color.FromArgb(50, 255, 255, 255);
+            appWindow.TitleBar.ButtonHoverForegroundColor = Microsoft.UI.Colors.White;
+            appWindow.TitleBar.ButtonPressedBackgroundColor = Windows.UI.Color.FromArgb(80, 255, 255, 255);
+            appWindow.TitleBar.ButtonPressedForegroundColor = Microsoft.UI.Colors.White;
+            appWindow.TitleBar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+            appWindow.TitleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(150, 255, 255, 255);
+        }
 
         // 加载用户设置
         var userSettings = Services.GetRequiredService<SweetPlayer.Services.Settings.IUserSettingsService>();

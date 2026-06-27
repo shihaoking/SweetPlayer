@@ -15,6 +15,9 @@ public sealed partial class MainWindow : Window
 
         Title = "SweetPlayer";
 
+        // 自定义标题栏：将 XAML 内容拓展到标题栏区域
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
         _navigationService = App.Services.GetService(typeof(INavigationService)) as INavigationService
             ?? new NavigationService();
         _navigationService.Frame = ContentFrame;

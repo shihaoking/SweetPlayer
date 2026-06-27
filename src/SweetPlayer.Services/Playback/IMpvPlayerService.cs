@@ -1,21 +1,16 @@
 namespace SweetPlayer.Services.Playback;
 
-using Microsoft.Extensions.Logging;
-
 /// <summary>
-/// 辅助类：在非 unsafe 上下文中等待任务完成（带超时）。
-/// MpvPlayerService 类为 unsafe，不能在其中使用 await，故抽出到这里。
+/// 解码模式。
 /// </summary>
-internal static class RendererReadyWaiter
+public enum DecodeMode
 {
-    public static async Task WaitAsync(Task<bool> readyTask, TimeSpan timeout, ILogger logger)
-    {
-        var completed = await Task.WhenAny(readyTask, Task.Delay(timeout)).ConfigureAwait(false);
-        if (completed != readyTask)
-        {
-            logger.LogWarning("等待渲染器就绪超时 ({Timeout}ms)", timeout.TotalMilliseconds);
-        }
-    }
+    /// <summary>自动选择（优先硬件解码）。</summary>
+    Auto,
+    /// <summary>纯软件解码。</summary>
+    Software,
+    /// <summary>强制硬件解码。</summary>
+    Hardware,
 }
 
 /// <summary>
@@ -45,7 +40,7 @@ public enum PlaybackState
 /// <remarks>
 /// 直接对应 libmpv 的能力封装；上层业务逻辑请使用 <see cref="IPlaybackControlService"/>。
 /// </remarks>
-public interface IMpvPlayerService : IDisposable
+public interface IMpvPlayerService : IAsyncDisposable
 {
     /// <summary>是否正在播放。</summary>
     bool IsPlaying { get; }
@@ -65,23 +60,19 @@ public interface IMpvPlayerService : IDisposable
     /// <summary>播放速度（0.5-2.0）。</summary>
     double Speed { get; set; }
 
-    /// <summary>使用 SwapChainPanel 句柄初始化渲染上下文（WinUI 调用）。</summary>
-    /// <param name="swapChainPanelHandle">SwapChainPanel 的本机指针。</param>
-    /// <param name="width">渲染区域宽度（像素）。</param>
-    /// <param name="height">渲染区域高度（像素）。</param>
-    void InitializeRenderer(IntPtr swapChainPanelHandle, int width, int height);
+    /// <summary>使用窗口句柄初始化 mpv（wid 模式）。</summary>
+    /// <param name="windowHandle">目标窗口的 HWND。</param>
+    Task InitializeAsync(IntPtr windowHandle);
 
-    /// <summary>渲染上下文是否已创建完成。</summary>
-    bool IsRendererReady { get; }
-
-    /// <summary>等待渲染上下文创建完成（在调用 LoadFileAsync 前使用，避免 mpv vo 初始化时报 'No render context set'）。</summary>
-    Task WaitForRendererReadyAsync(TimeSpan timeout);
-
-    /// <summary>渲染目标尺寸变化时调用。</summary>
-    void Resize(int width, int height);
+    /// <summary>配置解码模式。</summary>
+    Task SetDecodeOptionsAsync(DecodeMode mode);
 
     /// <summary>异步加载视频文件并准备播放。</summary>
     Task LoadFileAsync(string filePath);
+
+    /// <summary>等待 mpv 文件加载完成（FileLoaded 事件触发），可配合超时取消。</summary>
+    /// <param name="ct">取消令牌，用于超时保护。</param>
+    Task WaitForFileLoadedAsync(CancellationToken ct = default);
 
     /// <summary>开始/恢复播放。</summary>
     void Play();
@@ -100,9 +91,6 @@ public interface IMpvPlayerService : IDisposable
 
     /// <summary>停止播放并卸载文件。</summary>
     void Stop();
-
-    /// <summary>释放渲染上下文（SwapChain、D3D11 设备等），但保留 mpv 实例。用于退出播放页时清理资源。</summary>
-    void DisposeRenderer();
 
     /// <summary>切换字幕轨道（0 表示关闭）。</summary>
     void SetSubtitleTrack(int trackId);

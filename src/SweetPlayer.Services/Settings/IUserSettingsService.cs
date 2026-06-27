@@ -11,6 +11,11 @@ public interface IUserSettingsService
     bool AutoResumePlayback { get; set; }
 
     /// <summary>
+    /// 播放窗口默认展示模式（默认：Windowed）。
+    /// </summary>
+    PlaybackWindowMode DefaultPlaybackWindowMode { get; set; }
+
+    /// <summary>
     /// 保存设置到本地存储。
     /// </summary>
     Task SaveAsync();

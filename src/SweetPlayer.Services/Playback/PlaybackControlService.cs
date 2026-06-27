@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services.Detection;
+using SweetPlayer.Services.Settings;
 
 namespace SweetPlayer.Services.Playback;
 
@@ -73,17 +74,16 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
     private readonly IPlaybackProgressService _progress;
     private readonly IWindowsHdrService _hdr;
     private readonly ILogger<PlaybackControlService> _logger;
-    private readonly SweetPlayer.Services.Settings.IUserSettingsService _userSettings;
+    private readonly IUserSettingsService _userSettings;
     private readonly System.Threading.Timer _saveProgressTimer;
     private VideoFile? _currentVideo;
-    private bool _hdrAutoEnabled;
     private bool _disposed;
 
     public PlaybackControlService(
         IMpvPlayerService mpv,
         IPlaybackProgressService progress,
         IWindowsHdrService hdr,
-        SweetPlayer.Services.Settings.IUserSettingsService userSettings,
+        IUserSettingsService userSettings,
         ILogger<PlaybackControlService> logger)
     {
         _mpv = mpv;
@@ -127,7 +127,6 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
             if (needsHdr && _hdr.IsHdrSupported() && !_hdr.IsHdrEnabled())
             {
                 await _hdr.EnableHdrAsync();
-                _hdrAutoEnabled = true;
                 _logger.LogInformation("已为 HDR 视频自动启用系统 HDR：{File}", videoFile.FileName);
             }
         }
@@ -136,14 +135,19 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
             _logger.LogWarning(ex, "自动启用系统 HDR 失败");
         }
 
-        // 加载文件
-        // 等待渲染器就绪，避免 mpv 在 vo 初始化时报 'No render context set' 并禁用视频输出
-        await _mpv.WaitForRendererReadyAsync(TimeSpan.FromSeconds(10));
+        // 加载文件（wid 模式无需等待渲染器就绪）
         await _mpv.LoadFileAsync(videoFile.FullPath);
 
-        // 等待文件加载完成并且 mpv 准备好播放后再恢复进度
-        // 需要等待足够的时间让 mpv 完成内部初始化（包括音频解码器）
-        await Task.Delay(800);
+        // 等待 mpv FileLoaded 事件，确认文件已加载并准备好播放（超时 5 秒保护）
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try
+        {
+            await _mpv.WaitForFileLoadedAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("等待 FileLoaded 事件超时（5秒），继续尝试恢复进度");
+        }
 
         // 恢复上次播放进度（根据用户设置决定是否恢复）
         try
@@ -201,6 +205,20 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
     {
         _saveProgressTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
+        // 立即恢复系统 HDR（最高优先级，在任何其他清理之前执行）
+        try
+        {
+            if (_hdr.IsHdrSupported() && _hdr.IsHdrEnabled())
+            {
+                await _hdr.DisableHdrAsync();
+                _logger.LogInformation("已关闭系统 HDR");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "关闭系统 HDR 失败");
+        }
+
         try
         {
             await SaveCurrentProgressAsync();
@@ -211,29 +229,7 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         }
 
         _mpv.Stop();
-        
-        // 释放渲染资源，避免下次播放时渲染上下文冲突
-        _mpv.DisposeRenderer();
-        
         _currentVideo = null;
-
-        // 恢复 HDR 状态
-        if (_hdrAutoEnabled)
-        {
-            try
-            {
-                await _hdr.DisableHdrAsync();
-                _logger.LogInformation("已恢复系统 HDR 原始状态");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "恢复系统 HDR 状态失败");
-            }
-            finally
-            {
-                _hdrAutoEnabled = false;
-            }
-        }
     }
 
     public void Dispose()

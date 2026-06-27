@@ -1,589 +1,97 @@
-using System.IO;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI.Windowing;
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using SweetPlayer.Core.Models;
 using SweetPlayer.Services;
 using SweetPlayer.Services.Playback;
+using SweetPlayer.Services.Settings;
 using SweetPlayer.ViewModels;
-using Windows.Foundation;
-using Windows.Storage;
-using Windows.Storage.Pickers;
-using Windows.System;
-using Windows.UI.Core;
-using WinRT.Interop;
 
 namespace SweetPlayer.Views;
 
 /// <summary>
-/// 播放器页面：覆盖式 Overlay 布局 + 自动隐藏 + 全屏切换 + 键盘快捷键。
+/// 播放器桥接页：接收导航参数后打开独立 PlayerWindow，
+/// 窗口关闭后自动导航返回。页面本身显示为全黑。
 /// </summary>
 public sealed partial class PlayerPage : Page
 {
-    private readonly IPlaybackControlService _playback;
-    private readonly IKeyboardShortcutService _shortcuts;
     private readonly INavigationService _navigation;
-    private readonly DispatcherTimer _hideTimer;
-    private readonly DispatcherTimer _upNextTimer;
-    private bool _controlsVisible = true;
-    private bool _isFullScreen;
-    private bool _isAttached;
-
-    public PlayerViewModel ViewModel { get; }
+    private IPlaybackControlService? _playback;
+    private PlayerWindow? _playerWindow;
+    private PlayerViewModel? _viewModel;
 
     public PlayerPage()
     {
-        var sp = App.Services;
-        _playback = sp.GetRequiredService<IPlaybackControlService>();
-        _shortcuts = sp.GetRequiredService<IKeyboardShortcutService>();
-        _navigation = sp.GetRequiredService<INavigationService>();
-        ViewModel = sp.GetRequiredService<PlayerViewModel>();
-
+        _navigation = App.Services.GetRequiredService<INavigationService>();
         InitializeComponent();
-
-        _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _hideTimer.Tick += OnHideTimerTick;
-
-        _upNextTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _upNextTimer.Tick += OnUpNextTick;
-
-        Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
     }
 
-    // ---------- 生命周期 ----------
-
-    private void OnLoaded(object sender, RoutedEventArgs e)
-    {
-        // 关联渲染
-        VideoPlayer.AttachPlayer(_playback.MpvPlayer);
-
-        // 调试：检查控件状态
-        System.Diagnostics.Debug.WriteLine($"=== PlayerPage OnLoaded ===");
-        /**
-        System.Diagnostics.Debug.WriteLine($"TopBar - Visibility: {TopBar.Visibility}, Opacity: {TopBar.Opacity}, ActualWidth: {TopBar.ActualWidth}, ActualHeight: {TopBar.ActualHeight}");
-        System.Diagnostics.Debug.WriteLine($"BottomBar - Visibility: {BottomBar.Visibility}, Opacity: {BottomBar.Opacity}, ActualWidth: {BottomBar.ActualWidth}, ActualHeight: {BottomBar.ActualHeight}");
-        System.Diagnostics.Debug.WriteLine($"CenterPlayButton - Visibility: {CenterPlayButton.Visibility}, Opacity: {CenterPlayButton.Opacity}, ActualWidth: {CenterPlayButton.ActualWidth}, ActualHeight: {CenterPlayButton.ActualHeight}");
-        System.Diagnostics.Debug.WriteLine($"PlayerRoot - ActualWidth: {PlayerRoot.ActualWidth}, ActualHeight: {PlayerRoot.ActualHeight}");
-        System.Diagnostics.Debug.WriteLine($"VideoPlayer - Visibility: {VideoPlayer.Visibility}, ActualWidth: {VideoPlayer.ActualWidth}, ActualHeight: {VideoPlayer.ActualHeight}");
-        **/
-
-        // 初始 Speed 与 Volume 同步给 mpv（只赋值显示用，不重复触发）
-        ViewModel.ShowOsdHandler = (msg, glyph) => Osd.Show(msg, glyph);
-
-        // 注册键盘快捷键
-        _shortcuts.FullScreenToggleHandler = () =>
-        {
-            ToggleFullScreen();
-            return _isFullScreen;
-        };
-        _shortcuts.ExitPlayerHandler = () =>
-        {
-            DispatcherQueue.TryEnqueue(ExitPlayer);
-        };
-        _shortcuts.RegisterPlayerShortcuts(PlayerRoot, _playback);
-        _isAttached = true;
-
-        PlayerRoot.Focus(FocusState.Programmatic);
-
-        // 暂时禁用自动隐藏，用于调试
-        // _hideTimer.Start();
-        _upNextTimer.Start();
-
-        UpdatePlayIcons();
-        UpdateVolumeIcon();
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        _hideTimer.Stop();
-        _upNextTimer.Stop();
-        if (_isAttached)
-        {
-            _shortcuts.UnregisterShortcuts(PlayerRoot);
-            _isAttached = false;
-        }
-        ViewModel.DetachEvents();
-        ViewModel.ShowOsdHandler = null;
-        ShowMouseCursor();
-    }
-
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+
         if (e.Parameter is VideoFile vf)
         {
-            // 上层调用方决定是否在导航前已经调用 PlayVideoAsync。
-            // 这里仅刷新 ViewModel 标题/时长。
-            ViewModel.Initialize(vf);
-        }
-        else
-        {
-            ViewModel.Initialize(_playback.CurrentVideo);
-        }
-        ViewModel.LoadChaptersFromMpv();
-    }
+            var sp = App.Services;
 
-    // ---------- 自动隐藏控制 ----------
+            // 创建单个 mpv 实例，由 PlayerWindow 和 PlaybackControlService 共享
+            var mpv = sp.GetRequiredService<IMpvPlayerService>();
+            _playerWindow = ActivatorUtilities.CreateInstance<PlayerWindow>(sp, mpv);
+            _playback = ActivatorUtilities.CreateInstance<PlaybackControlService>(sp, mpv);
+            _viewModel = ActivatorUtilities.CreateInstance<PlayerViewModel>(sp, (IPlaybackControlService)_playback);
 
-    private void OnHideTimerTick(object? sender, object e)
-    {
-        // 设置面板打开时不隐藏
-        if (ViewModel.IsSettingsPaneOpen)
-        {
-            ResetHideTimer();
-            return;
-        }
-        HideControls();
-    }
+            // 初始化 ViewModel
+            _viewModel.Initialize(vf);
+            _viewModel.LoadChaptersFromMpv();
 
-    private void ResetHideTimer()
-    {
-        _hideTimer.Stop();
-        _hideTimer.Start();
-    }
+            // 显示独立播放窗口
+            await _playerWindow.ShowAsync();
 
-    private void ShowControlsImmediate()
-    {
-        if (_controlsVisible) return;
-        _controlsVisible = true;
-        AnimateOpacity(TopBar, 1.0, 200);
-        AnimateOpacity(BottomBar, 1.0, 200);
-        AnimateOpacity(CenterPlayButton, 1.0, 200);
-        ShowMouseCursor();
-    }
-
-    private void HideControls()
-    {
-        if (!_controlsVisible) return;
-        _controlsVisible = false;
-        AnimateOpacity(TopBar, 0.0, 300);
-        AnimateOpacity(BottomBar, 0.0, 300);
-        AnimateOpacity(CenterPlayButton, 0.0, 300);
-        HideMouseCursor();
-    }
-
-    private static void AnimateOpacity(UIElement target, double to, int durationMs)
-    {
-        var anim = new DoubleAnimation
-        {
-            To = to,
-            Duration = new Duration(TimeSpan.FromMilliseconds(durationMs)),
-            EnableDependentAnimation = true,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        Storyboard.SetTarget(anim, target);
-        Storyboard.SetTargetProperty(anim, "Opacity");
-        var sb = new Storyboard();
-        sb.Children.Add(anim);
-        sb.Begin();
-    }
-
-    private void ShowMouseCursor()
-    {
-        try
-        {
-            ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Arrow);
-        }
-        catch { /* ignore */ }
-    }
-
-    private void HideMouseCursor()
-    {
-        try
-        {
-            // WinUI 3 中通过 ProtectedCursor 设为 null 隐藏；某些环境可能不支持。
-            ProtectedCursor = null;
-        }
-        catch { /* ignore */ }
-    }
-
-    // ---------- 输入事件 ----------
-
-    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        ShowControlsImmediate();
-        ResetHideTimer();
-    }
-
-    private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        ShowControlsImmediate();
-        ResetHideTimer();
-
-        // 章节快捷键 (Ctrl+Left / Ctrl+Right)
-        var ctrl = (Microsoft.UI.Input.InputKeyboardSource
-            .GetKeyStateForCurrentThread(VirtualKey.Control)
-            & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
-        if (ctrl)
-        {
-            switch (e.Key)
+            // 根据用户设置决定起始窗口模式
+            var userSettings = App.Services.GetRequiredService<IUserSettingsService>();
+            if (userSettings.DefaultPlaybackWindowMode == PlaybackWindowMode.FullScreen)
             {
-                case VirtualKey.Left:
-                    ViewModel.PrevChapterCommand.Execute(null);
-                    e.Handled = true;
-                    break;
-                case VirtualKey.Right:
-                    ViewModel.NextChapterCommand.Execute(null);
-                    e.Handled = true;
-                    break;
-            }
-        }
-    }
-
-    private void OnRootTapped(object sender, TappedRoutedEventArgs e)
-    {
-        // 单击视频区域：切换控制层可见性
-        if (e.OriginalSource is FrameworkElement fe && IsOverlayHit(fe))
-        {
-            return;
-        }
-        if (_controlsVisible)
-        {
-            HideControls();
-            _hideTimer.Stop();
-        }
-        else
-        {
-            ShowControlsImmediate();
-            ResetHideTimer();
-        }
-    }
-
-    private void OnRootDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
-    {
-        if (e.OriginalSource is FrameworkElement fe && IsOverlayHit(fe))
-        {
-            return;
-        }
-        ToggleFullScreen();
-    }
-
-    private static bool IsOverlayHit(DependencyObject element)
-    {
-        // 沿 Visual 树向上查找，命中按钮/滑块/边框等控件即视为 overlay 命中
-        var current = element;
-        while (current is not null)
-        {
-            if (current is Button or Slider or NumberBox or ComboBox or ListView or RadioButtons or Pivot or PivotItem)
-            {
-                return true;
-            }
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return false;
-    }
-
-    // ---------- 进度条 ----------
-
-    private double _lastSliderValue = 0;
-    private bool _isDragging = false;
-
-    private void OnProgressSliderValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine($"[PlayerPage] ValueChanged: OldValue={e.OldValue}, NewValue={e.NewValue}, IsUserSeeking={ViewModel.IsUserSeeking}");
-        
-        // 检测拖动：如果值变化超过阈值（正常播放1秒约变化1-2），认为是用户拖动
-        var diff = Math.Abs(e.NewValue - e.OldValue);
-        
-        if (diff > 5.0 && !_isDragging)
-        {
-            // 检测到用户开始拖动
-            _isDragging = true;
-            ViewModel.IsUserSeeking = true;
-            System.Diagnostics.Debug.WriteLine($"[PlayerPage] Drag started detected (diff={diff}), setting IsUserSeeking=true");
-        }
-        
-        // 在拖动过程中更新 ViewModel 的位置
-        if (_isDragging || ViewModel.IsUserSeeking)
-        {
-            ViewModel.PositionSeconds = e.NewValue;
-            _lastSliderValue = e.NewValue;
-            System.Diagnostics.Debug.WriteLine($"[PlayerPage] Updated PositionSeconds to {e.NewValue} during drag");
-        }
-        else
-        {
-            // 正常播放进度更新
-            _lastSliderValue = e.NewValue;
-        }
-    }
-
-    private void OnProgressGridPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        // 检查是否点击在 Slider 区域
-        if (e.OriginalSource is Microsoft.UI.Xaml.Controls.Slider || 
-            (e.OriginalSource is FrameworkElement fe && FindParent<Slider>(fe) is not null))
-        {
-            System.Diagnostics.Debug.WriteLine("[PlayerPage] PointerPressed on Slider area");
-            ViewModel.IsUserSeeking = true;
-            _isDragging = true;
-        }
-    }
-
-    private void OnProgressGridPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine($"[PlayerPage] Grid PointerReleased, IsUserSeeking={ViewModel.IsUserSeeking}, PositionSeconds={ViewModel.PositionSeconds}");
-        if (ViewModel.IsUserSeeking || _isDragging)
-        {
-            ViewModel.CommitSeekFromSlider();
-            _isDragging = false;
-        }
-    }
-
-    private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
-    {
-        var parent = VisualTreeHelper.GetParent(child);
-        while (parent is not null)
-        {
-            if (parent is T typed) return typed;
-            parent = VisualTreeHelper.GetParent(parent);
-        }
-        return null;
-    }
-
-    private void OnSliderPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine("[PlayerPage] Slider PointerPressed");
-        ViewModel.IsUserSeeking = true;
-        _isDragging = true;
-        e.Handled = true;
-    }
-
-    private void OnSliderPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine($"[PlayerPage] Slider PointerReleased, PositionSeconds={ViewModel.PositionSeconds}");
-        if (ViewModel.IsUserSeeking || _isDragging)
-        {
-            ViewModel.CommitSeekFromSlider();
-            _isDragging = false;
-        }
-        e.Handled = true;
-    }
-
-    private void OnSliderTapped(object sender, TappedRoutedEventArgs e)
-    {
-        System.Diagnostics.Debug.WriteLine($"[PlayerPage] Tapped - 用户点击进度条, PositionSeconds={ViewModel.PositionSeconds}");
-        // 点击进度条时立即执行 seek
-        ViewModel.PositionSeconds = ProgressSlider.Value;
-        ViewModel.CommitSeekFromSlider();
-        _isDragging = false;
-        e.Handled = true;
-    }
-
-    // ---------- 控制按钮 ----------
-
-    private void OnBackClick(object sender, RoutedEventArgs e) => ExitPlayer();
-
-    private void OnGearClick(object sender, RoutedEventArgs e)
-    {
-        ViewModel.ToggleSettingsPaneCommand.Execute(null);
-    }
-
-    private void OnCloseSettingsClick(object sender, RoutedEventArgs e)
-    {
-        ViewModel.IsSettingsPaneOpen = false;
-    }
-
-    private void OnSettingsMaskTapped(object sender, TappedRoutedEventArgs e)
-    {
-        // 点击遮罩区域关闭设置面板
-        ViewModel.IsSettingsPaneOpen = false;
-        e.Handled = true;
-    }
-
-    private void OnTogglePlayPauseClick(object sender, RoutedEventArgs e)
-    {
-        ViewModel.TogglePlayPauseCommand.Execute(null);
-        UpdatePlayIcons();
-    }
-
-    private void OnSeekForwardClick(object sender, RoutedEventArgs e) =>
-        ViewModel.SeekForwardCommand.Execute(null);
-
-    private void OnSeekBackwardClick(object sender, RoutedEventArgs e) =>
-        ViewModel.SeekBackwardCommand.Execute(null);
-
-    private void OnMuteClick(object sender, RoutedEventArgs e)
-    {
-        ViewModel.ToggleMuteCommand.Execute(null);
-        UpdateVolumeIcon();
-    }
-
-    private void OnSpeedItemClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is MenuFlyoutItem item && item.Tag is string raw &&
-            double.TryParse(raw, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var v))
-        {
-            var option = ViewModel.Speeds.FirstOrDefault(s => Math.Abs(s.Value - v) < 0.001);
-            if (option is not null)
-            {
-                ViewModel.SelectSpeedCommand.Execute(option);
-            }
-        }
-    }
-
-    private void OnSubtitleClick(object sender, RoutedEventArgs e) =>
-        ViewModel.OpenSettingsTabCommand.Execute(2);
-
-    private void OnAudioClick(object sender, RoutedEventArgs e) =>
-        ViewModel.OpenSettingsTabCommand.Execute(1);
-
-    private void OnFullScreenClick(object sender, RoutedEventArgs e) => ToggleFullScreen();
-
-    private void OnSubtitleTrackClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is TrackItem t)
-        {
-            ViewModel.SelectSubtitleCommand.Execute(t);
-        }
-    }
-
-    private void OnAudioTrackClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is TrackItem t)
-        {
-            ViewModel.SelectAudioCommand.Execute(t);
-        }
-    }
-
-    private void OnChapterClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is ChapterItem c)
-        {
-            ViewModel.JumpToChapterCommand.Execute(c);
-        }
-    }
-
-    private async void OnAddLocalSubtitleClick(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var picker = new FileOpenPicker();
-            picker.FileTypeFilter.Add(".srt");
-            picker.FileTypeFilter.Add(".ass");
-            picker.FileTypeFilter.Add(".ssa");
-            picker.FileTypeFilter.Add(".sub");
-
-            var window = MainWindowAccessor.Current;
-            if (window is not null)
-            {
-                var hwnd = WindowNative.GetWindowHandle(window);
-                InitializeWithWindow.Initialize(picker, hwnd);
+                _playerWindow.ToggleFullScreen();
             }
 
-            var file = await picker.PickSingleFileAsync();
-            if (file is not null)
-            {
-                _playback.MpvPlayer.LoadExternalSubtitle(file.Path);
-                ViewModel.SubtitleTracks.Add(new TrackItem
-                {
-                    TrackId = ViewModel.SubtitleTracks.Count + 1,
-                    Title = Path.GetFileName(file.Path)
-                });
-                ViewModel.ShowOsd($"已加载字幕: {Path.GetFileName(file.Path)}", "\uED1E");
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"AddLocalSubtitle 失败: {ex.Message}");
+            // 设置 UI 覆盖层
+            var overlay = new PlayerWindowOverlay(_playerWindow, _viewModel, _playback);
+            _playerWindow.SetOverlayContent(overlay);
+
+            // 监听窗口关闭
+            _playerWindow.Closed += OnPlayerWindowClosed;
+
+            // 开始播放（等待完成，确保文件加载成功）
+            await _playback.PlayVideoAsync(vf);
         }
     }
 
-    private void OnSearchOnlineSubtitleClick(object sender, RoutedEventArgs e)
+    private async void OnPlayerWindowClosed(object? sender, EventArgs e)
     {
-        // 在线字幕搜索由字幕模块（任务 6）提供，此处仅提示。
-        ViewModel.ShowOsd("正在搜索在线字幕...", "\uE721");
-    }
-
-    // ---------- 全屏 ----------
-
-    private void ToggleFullScreen()
-    {
-        var window = MainWindowAccessor.Current;
-        if (window is null) return;
-
-        try
+        if (_playerWindow is not null)
         {
-            var hwnd = WindowNative.GetWindowHandle(window);
-            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-            var appWindow = AppWindow.GetFromWindowId(windowId);
+            _playerWindow.Closed -= OnPlayerWindowClosed;
+        }
 
-            if (_isFullScreen)
+        // 保存播放进度并清理 HDR 状态（mpv 实例已被 PlayerWindow.DisposeAsync 销毁）
+        if (_playback is not null)
+        {
+            await _playback.StopAsync();
+        }
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var mainWindow = App.MainWindow ?? MainWindowAccessor.Current;
+            mainWindow?.Activate();
+
+            if (_navigation.CanGoBack)
             {
-                appWindow.SetPresenter(AppWindowPresenterKind.Default);
-                _isFullScreen = false;
+                _navigation.GoBack();
             }
             else
             {
-                appWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
-                _isFullScreen = true;
+                _navigation.NavigateTo(typeof(HomePage));
             }
-            FullScreenIcon.Glyph = _isFullScreen ? "\uE73F" : "\uE740";
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"ToggleFullScreen 失败: {ex.Message}");
-        }
-    }
-
-    private void ExitPlayer()
-    {
-        if (_isFullScreen) ToggleFullScreen();
-        _playback.Stop();
-        if (_navigation.CanGoBack)
-        {
-            _navigation.GoBack();
-        }
-        else
-        {
-            _navigation.NavigateTo(typeof(HomePage));
-        }
-    }
-
-    // ---------- Up Next & 图标更新 ----------
-
-    private void OnUpNextTick(object? sender, object e)
-    {
-        UpdatePlayIcons();
-        UpdateVolumeIcon();
-
-        if (ViewModel.UpNextVisible)
-        {
-            ViewModel.UpNextCountdown = Math.Max(0, ViewModel.UpNextCountdown - 1);
-            if (ViewModel.UpNextCountdown <= 0)
-            {
-                ViewModel.PlayNextEpisodeCommand.Execute(null);
-            }
-        }
-    }
-
-    private void UpdatePlayIcons()
-    {
-        var glyph = _playback.IsPlaying ? "\uE769" : "\uE768"; // pause / play
-        if (CenterPlayIcon is not null) CenterPlayIcon.Glyph = glyph;
-        if (BottomPlayIcon is not null) BottomPlayIcon.Glyph = glyph;
-    }
-
-    private void UpdateVolumeIcon()
-    {
-        if (VolumeIcon is null) return;
-        if (ViewModel.IsMuted || ViewModel.Volume <= 0.5)
-        {
-            VolumeIcon.Glyph = "\uE74F"; // Mute
-        }
-        else if (ViewModel.IsVolumeBoosted)
-        {
-            VolumeIcon.Glyph = "\uE995"; // Boost (loud)
-        }
-        else
-        {
-            VolumeIcon.Glyph = "\uE767"; // Volume
-        }
+        });
     }
 }

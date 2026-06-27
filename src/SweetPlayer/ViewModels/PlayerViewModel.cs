@@ -142,9 +142,11 @@ public sealed partial class PlayerViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isUserSeeking;
 
+    /// <summary>Overlay 指针事件设置的拖拽进行中标志，OnPositionChanged 据此抑制回写。</summary>
+    public bool IsDraggingSlider { get; set; }
+
     partial void OnIsUserSeekingChanged(bool value)
     {
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] IsUserSeeking changed to: {value}");
     }
 
     public string CurrentTimeText => FormatTime(TimeSpan.FromSeconds(PositionSeconds));
@@ -453,16 +455,11 @@ public sealed partial class PlayerViewModel : ViewModelBase
     public void CommitSeekFromSlider()
     {
         var targetSec = PositionSeconds;
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] CommitSeekFromSlider: target={targetSec}s, duration={DurationSeconds}s");
         IsUserSeeking = false;
         var target = TimeSpan.FromSeconds(targetSec);
         _suppressSeekFeedback = true;
         _seekTargetSeconds = targetSec;
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Calling _playback.MpvPlayer.Seek({target})");
         _playback.MpvPlayer.Seek(target);
-        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Seek call completed");
-        
-        // 确保 IsUserSeeking 在 seek 完成后保持为 false，让后续的位置更新能够同步到 UI
         IsUserSeeking = false;
     }
 
@@ -472,6 +469,12 @@ public sealed partial class PlayerViewModel : ViewModelBase
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
+            // 用户正在拖拽进度条，完全抑制 mpv 位置回写
+            if (IsDraggingSlider)
+            {
+                return;
+            }
+
             // 提交 seek 后，只有在 mpv 报告接近目标位置时才解除抽制，避免被旧位置覆盖
             if (_suppressSeekFeedback)
             {
@@ -479,23 +482,11 @@ public sealed partial class PlayerViewModel : ViewModelBase
                 {
                     _suppressSeekFeedback = false;
                     PositionSeconds = position.TotalSeconds;
-                    // 确保 IsUserSeeking 在 seek 完成后被重置
-                    if (IsUserSeeking)
-                    {
-                        IsUserSeeking = false;
-                        System.Diagnostics.Debug.WriteLine($"[PlayerVM] Reset IsUserSeeking to false after seek completed");
-                    }
                 }
                 // 否则丢弃本次回写（mpv seek 未完成）
             }
             else
             {
-                // 正常播放时，如果 IsUserSeeking 仍然为 true，也重置它
-                if (IsUserSeeking)
-                {
-                    IsUserSeeking = false;
-                    System.Diagnostics.Debug.WriteLine($"[PlayerVM] Reset IsUserSeeking to false during normal playback");
-                }
                 PositionSeconds = position.TotalSeconds;
             }
 
@@ -518,7 +509,7 @@ public sealed partial class PlayerViewModel : ViewModelBase
 
     // ---------- OSD ----------
 
-    /// <summary>请求显示 OSD 通知；由 PlayerPage 通过该委托代理到 UI 控件。</summary>
+    /// <summary>请求显示 OSD 通知；由 PlayerWindowOverlay 通过该委托代理到 UI 控件。</summary>
     public Action<string, string>? ShowOsdHandler { get; set; }
 
     public void ShowOsd(string message, string glyph = "\uE767")

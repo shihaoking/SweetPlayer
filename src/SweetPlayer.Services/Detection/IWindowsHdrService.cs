@@ -11,9 +11,9 @@ public interface IWindowsHdrService
     /// <summary>当前主显示器是否已启用 HDR。</summary>
     bool IsHdrEnabled();
 
-    /// <summary>启用系统 HDR；调用前会记录原始状态以便后续恢复。</summary>
+    /// <summary>启用系统 HDR。</summary>
     Task EnableHdrAsync();
 
-    /// <summary>恢复到上次 <see cref="EnableHdrAsync"/> 之前的 HDR 状态。</summary>
+    /// <summary>关闭系统 HDR。</summary>
     Task DisableHdrAsync();
 }

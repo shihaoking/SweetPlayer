@@ -13,23 +13,11 @@
                     Spacing="14"
                     MaxWidth="420">
 
-            <!-- 应用 Logo（占位） -->
-            <Border Width="120"
-                    Height="120"
-                    CornerRadius="60"
-                    HorizontalAlignment="Center">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#FFD4A017" Offset="0" />
-                        <GradientStop Color="#FF1AB897" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-                <FontIcon Glyph="&#xE714;"
-                          FontSize="56"
-                          Foreground="White"
-                          HorizontalAlignment="Center"
-                          VerticalAlignment="Center" />
-            </Border>
+            <!-- 应用 Logo -->
+            <Image Source="/Assets/SweetPlayer.png"
+                   Width="120"
+                   Height="120"
+                   HorizontalAlignment="Center" />
 
             <!-- 应用名称 -->
             <TextBlock Text="SweetPlayer"
@@ -72,6 +60,20 @@
                                   Margin="0,8,0,0" />
                     
                     <TextBlock Text="开启后，再次播放视频时将从上次离开的位置继续播放"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Opacity="0.6"
+                               TextWrapping="Wrap" />
+
+                    <!-- 默认播放窗口模式 -->
+                    <ComboBox Header="默认播放窗口模式"
+                              SelectedIndex="{x:Bind ViewModel.SelectedPlaybackWindowModeIndex, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"
+                              Margin="0,12,0,0">
+                        <ComboBoxItem Content="窗口模式" />
+                        <ComboBoxItem Content="全屏模式" />
+                    </ComboBox>
+
+                    <TextBlock Text="设置播放视频时的默认窗口模式"
                                Style="{StaticResource CaptionTextBlockStyle}"
                                Opacity="0.6"
                                TextWrapping="Wrap" />

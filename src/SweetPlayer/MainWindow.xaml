@@ -10,6 +10,17 @@
     mc:Ignorable="d">
 
     <Grid>
+        <!-- 自定义标题栏 -->
+        <Grid x:Name="AppTitleBar"
+              Height="48"
+              VerticalAlignment="Top"
+              Background="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+        </Grid>
+
         <NavigationView
             x:Name="RootNavigationView"
             PaneDisplayMode="LeftCompact"

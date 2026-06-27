@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SweetPlayer.Core.Data;
 using SweetPlayer.Core.Models;
+using SweetPlayer.Services.Detection;
 using SweetPlayer.Services.MediaSources;
 using SweetPlayer.Services.Scraping;
 using SweetPlayer.Services.Security;
@@ -30,6 +32,8 @@ public sealed class MediaScannerService : IMediaScannerService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IPasswordProtector _passwordProtector;
     private readonly IScrapingQueueService _scrapingQueue;
+    private readonly IVideoAnalysisService _videoAnalysis;
+    private readonly IHdrDetectionService _hdrDetection;
     private readonly ILogger<MediaScannerService> _logger;
 
     public MediaScannerService(
@@ -37,12 +41,16 @@ public sealed class MediaScannerService : IMediaScannerService
         IHttpClientFactory httpClientFactory,
         IPasswordProtector passwordProtector,
         IScrapingQueueService scrapingQueue,
+        IVideoAnalysisService videoAnalysis,
+        IHdrDetectionService hdrDetection,
         ILogger<MediaScannerService> logger)
     {
         _dbContextFactory = dbContextFactory;
         _httpClientFactory = httpClientFactory;
         _passwordProtector = passwordProtector;
         _scrapingQueue = scrapingQueue;
+        _videoAnalysis = videoAnalysis;
+        _hdrDetection = hdrDetection;
         _logger = logger;
     }
 
@@ -84,7 +92,7 @@ public sealed class MediaScannerService : IMediaScannerService
                 _ => Array.Empty<DiscoveredFile>()
             };
 
-            var (added, removed, total, newFileIds) = await SyncDatabaseAsync(source.Id, discovered, cancellationToken).ConfigureAwait(false);
+            var (added, removed, total, newFileIds) = await SyncDatabaseAsync(source, discovered, cancellationToken).ConfigureAwait(false);
 
             await UpdateAfterScanAsync(source.Id, total, ScanStatus.Completed, error: false, cancellationToken).ConfigureAwait(false);
 
@@ -333,10 +341,11 @@ public sealed class MediaScannerService : IMediaScannerService
     }
 
     private async Task<(int added, int removed, int total, List<int> newFileIds)> SyncDatabaseAsync(
-        int sourceId,
+        MediaSource source,
         IReadOnlyList<DiscoveredFile> discovered,
         CancellationToken cancellationToken)
     {
+        var sourceId = source.Id;
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
 
         var existing = await db.VideoFiles
@@ -376,6 +385,19 @@ public sealed class MediaScannerService : IMediaScannerService
                 MediaType = MediaType.Unknown,
                 DiscoveredAt = DateTime.UtcNow
             };
+
+            // 执行 HDR / 杜比视界 / 杜比全景声检测（本地文件直接分析，WebDAV 通过 ffprobe HTTP 支持）
+            var analyzeTarget = source.Type switch
+            {
+                MediaSourceType.Local when File.Exists(file.FullPath) => file.FullPath,
+                MediaSourceType.WebDAV => BuildWebDavUrl(file.FullPath, source),
+                _ => null
+            };
+            if (analyzeTarget != null)
+            {
+                await DetectHdrAndAtmosAsync(videoFile, analyzeTarget, cancellationToken).ConfigureAwait(false);
+            }
+
             _logger.LogDebug("识别文件源 {SourceId} 中的新文件，向DB中添加，文件名：{FileName}", sourceId, videoFile.FileName);
             db.VideoFiles.Add(videoFile);
             added++;
@@ -405,6 +427,71 @@ public sealed class MediaScannerService : IMediaScannerService
         }
 
         return (added, toRemove.Count, discovered.Count, newFileIds);
+    }
+
+    /// <summary>
+    /// 为 WebDAV URL 注入认证凭据，供 ffprobe 直接访问。
+    /// </summary>
+    private string? BuildWebDavUrl(string fileUrl, MediaSource source)
+    {
+        if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        // 无凭据时直接使用原始 URL
+        if (string.IsNullOrEmpty(source.Username))
+        {
+            return fileUrl;
+        }
+
+        var password = string.IsNullOrEmpty(source.Password)
+            ? string.Empty
+            : _passwordProtector.Unprotect(source.Password);
+
+        // 将凭据嵌入 URL：http://user:pass@host/path
+        var builder = new UriBuilder(uri)
+        {
+            UserName = Uri.EscapeDataString(source.Username),
+            Password = Uri.EscapeDataString(password)
+        };
+        return builder.Uri.AbsoluteUri;
+    }
+
+    /// <summary>
+    /// 调用 FFprobe 分析视频流，并通过 HDR 检测服务填充 VideoFile 的 HDR / 杜比视界 / 杜比全景声字段。
+    /// </summary>
+    private async Task DetectHdrAndAtmosAsync(VideoFile videoFile, string filePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var streamInfo = await _videoAnalysis.AnalyzeAsync(filePath).ConfigureAwait(false);
+            sw.Stop();
+            _logger.LogDebug("FFprobe 分析完成：{FileName}，耗时 {ElapsedMs} ms", videoFile.FileName, sw.ElapsedMilliseconds);
+
+            if (cancellationToken.IsCancellationRequested) return;
+
+            // HDR / 杜比视界判定
+            var hdrResult = _hdrDetection.Detect(streamInfo);
+            videoFile.HasHDR = hdrResult.IsHdr;
+            videoFile.HdrFormat = hdrResult.Format;
+            videoFile.HasDolbyVision = hdrResult.Format == HdrFormat.DolbyVision;
+
+            // 杜比全景声：遍历音频流检测
+            videoFile.HasDolbyAtmos = streamInfo.AudioStreams.Any(a => a.IsAtmos);
+
+            if (videoFile.HasHDR || videoFile.HasDolbyAtmos)
+            {
+                _logger.LogDebug("文件 {FileName}：HDR={Hdr}, 格式={Format}, Atmos={Atmos}",
+                    videoFile.FileName, videoFile.HasHDR, videoFile.HdrFormat, videoFile.HasDolbyAtmos);
+            }
+        }
+        catch (Exception ex)
+        {
+            // FFprobe 不可用或文件损坏不影响主流程，仅记录警告
+            _logger.LogWarning(ex, "HDR/杜比检测失败，跳过：{FileName}", videoFile.FileName);
+        }
     }
 
     private async Task SetScanStatusAsync(int sourceId, ScanStatus status, CancellationToken cancellationToken)
