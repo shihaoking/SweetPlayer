@@ -70,6 +70,10 @@ public interface IMpvPlayerService : IAsyncDisposable
     /// <summary>异步加载视频文件并准备播放。</summary>
     Task LoadFileAsync(string filePath);
 
+    /// <summary>等待 mpv 文件加载完成（FileLoaded 事件触发），可配合超时取消。</summary>
+    /// <param name="ct">取消令牌，用于超时保护。</param>
+    Task WaitForFileLoadedAsync(CancellationToken ct = default);
+
     /// <summary>开始/恢复播放。</summary>
     void Play();
 

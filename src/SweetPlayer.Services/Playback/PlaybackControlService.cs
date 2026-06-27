@@ -138,9 +138,16 @@ public class PlaybackControlService : IPlaybackControlService, IDisposable
         // 加载文件（wid 模式无需等待渲染器就绪）
         await _mpv.LoadFileAsync(videoFile.FullPath);
 
-        // 等待文件加载完成并且 mpv 准备好播放后再恢复进度
-        // 需要等待足够的时间让 mpv 完成内部初始化（包括音频解码器）
-        await Task.Delay(800);
+        // 等待 mpv FileLoaded 事件，确认文件已加载并准备好播放（超时 5 秒保护）
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try
+        {
+            await _mpv.WaitForFileLoadedAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("等待 FileLoaded 事件超时（5秒），继续尝试恢复进度");
+        }
 
         // 恢复上次播放进度（根据用户设置决定是否恢复）
         try

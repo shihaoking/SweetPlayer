@@ -29,6 +29,9 @@ public class MpvPlayerService : IMpvPlayerService
     private double _speed = 1.0;
     private PlaybackState _state = PlaybackState.Idle;
 
+    /// <summary>用于等待 FileLoaded 事件的信号。</summary>
+    private TaskCompletionSource? _fileLoadedTcs;
+
     public MpvPlayerService(ILogger<MpvPlayerService> logger)
     {
         _logger = logger;
@@ -138,6 +141,9 @@ public class MpvPlayerService : IMpvPlayerService
             return;
         }
 
+        // 创建新的 TCS，确保每次 LoadFile 都有独立的等待信号
+        _fileLoadedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
         UpdateState(PlaybackState.Loading);
 
         try
@@ -150,8 +156,28 @@ public class MpvPlayerService : IMpvPlayerService
         catch (Exception ex)
         {
             _logger.LogError(ex, "loadfile 命令失败");
+            _fileLoadedTcs.TrySetException(ex);
             UpdateState(PlaybackState.Error);
         }
+    }
+
+    public Task WaitForFileLoadedAsync(CancellationToken ct = default)
+    {
+        var tcs = _fileLoadedTcs;
+        if (tcs is null)
+        {
+            // 未调用 LoadFileAsync 则直接返回完成
+            return Task.CompletedTask;
+        }
+
+        if (!ct.CanBeCanceled)
+        {
+            return tcs.Task;
+        }
+
+        // 注册取消回调，超时时取消 TCS
+        var registration = ct.Register(() => tcs.TrySetCanceled(ct));
+        return tcs.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
     }
 
     public void Play()
@@ -324,6 +350,7 @@ public class MpvPlayerService : IMpvPlayerService
     {
         _logger.LogInformation("收到 FileLoaded 事件");
         UpdateState(PlaybackState.Playing);
+        _fileLoadedTcs?.TrySetResult();
     }
 
     // ======================== 内部方法 ========================
